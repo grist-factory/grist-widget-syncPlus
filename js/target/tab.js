@@ -7,7 +7,7 @@ import { fetchRows, isReadOnly, readSchema } from '../grist.js';
 import { dropPages, ensureForm, formPages, removeTechnicalTables, renewFormLink } from '../pages.js';
 import { endExchange } from '../exchange.js';
 import { legacyJournals, receivedJournals, updateJournalNote } from './journals.js';
-import { consolidateAll, forgetJournal, isAccessError, state, tableKey } from './loop.js';
+import { consolidateAll, forgetJournal, isAccessError, restoreSource, state, tableKey } from './loop.js';
 import { offerDialog } from './dest.js';
 import { receiveWizard } from './wizard.js';
 import { confirmDialog, el, errorText, icon, message, openModal, pickField, run } from '../ui.js';
@@ -226,7 +226,8 @@ const miniGrid = (head, rows) => el('div', { class: 'mini-grid-wrap' }, el('tabl
   el('thead', {}, el('tr', {}, head.map(h => el('th', { scope: 'col' }, h)))), el('tbody', {}, rows)));
 
 // Valeurs retouchées à la main dans une destination : chaque cellule qui diffère de la dernière
-// version reçue, avec son numéro de ligne. Elles restent jusqu'à ce que la SOURCE change leur ligne.
+// version reçue, avec son numéro de ligne. Elles restent jusqu'à ce que la SOURCE change leur ligne,
+// ou que l'on clique sur « Corriger ».
 function driftBlock(group, entry) {
   const result = state.results.get(tableKey(group.journal, entry.table)) || {};
   const cells = (result.drift || []).flatMap(d => d.cells.map(c => ({ ...d, c })));
@@ -240,7 +241,15 @@ function driftBlock(group, entry) {
     el('strong', {}, t('recv.drift.title', { dest: entry.dest, n: total })),
     el('p', { class: 'small' }, t('recv.drift.body', { n: total })),
     miniGrid([t('recv.drift.row'), result.labelCol || '', t('recv.drift.col'), t('recv.drift.here'), t('recv.drift.source')], rows),
-    total > DRIFT_MAX ? el('p', { class: 'small' }, t('recv.history.more', { n: total - DRIFT_MAX })) : null);
+    total > DRIFT_MAX ? el('p', { class: 'small' }, t('recv.history.more', { n: total - DRIFT_MAX })) : null,
+    el('div', { class: 'card-actions' }, button(t('recv.drift.fix'), 'check', e => run(e.currentTarget, container.querySelector('.out'), () => correct(group, entry, total)))));
+}
+
+// « Corriger » : les valeurs retouchées reprennent celles de la SOURCE, après confirmation.
+async function correct(group, entry, n) {
+  if (!(await confirmDialog({ title: t('recv.drift.fixTitle', { dest: entry.dest }), body: t('recv.drift.fixBody', { n }), confirmLabel: t('recv.drift.fix') }))) return;
+  await restoreSource(group.journal, entry.table);
+  await renderTarget();
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -11,7 +11,7 @@ Sans serveur à héberger, sans dépendance, et seules les colonnes que vous cho
 
 <img src="docs/images/14-cible-historique.png" width="820" alt="Le widget dans le document qui reçoit : l'export « Annuaire » est à jour et liste les lignes ajoutées, modifiées et supprimées depuis la dernière visite">
 
-<sub>Version 0.5.4 · Grist 1.7.11 ou plus récent · licence GPL-3.0 · Grist Factory</sub>
+<sub>Version 0.5.5 · Grist 1.7.11 ou plus récent · licence GPL-3.0 · Grist Factory</sub>
 
 </div>
 
@@ -97,7 +97,7 @@ aussi dans le widget (onglet **Tutoriel**), et chaque étape des assistants a so
   fenêtre.
 - **Retouches respectées** : une correction faite à la main dans la CIBLE reste jusqu'au prochain
   changement de la ligne dans la SOURCE, et la carte la signale avec le détail (ligne, valeur
-  d'ici, valeur de la SOURCE).
+  d'ici, valeur de la SOURCE) et un bouton « Corriger » qui remet la valeur de la SOURCE.
 - **Grandes tables** : pas de limite de lignes (testé avec 21 000), gros imports envoyés par
   tranches, file d'envoi bloquée vidée puis renvoyée.
 - **Suivi clair** : une carte par export et par réception, dernier envoi, erreurs expliquées,

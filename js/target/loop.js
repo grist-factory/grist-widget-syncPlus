@@ -4,7 +4,7 @@
 import { EXPORT_COL, KEY_COL, KIND, LIST_COL, RESEND_COL, SYNC_TABLE, TABLE_COL, TYPE_COL, randomHex } from '../logic/common.js';
 import { exchangeColumns, exportTables } from '../logic/exports.js';
 import { awaitingPartner, expandRows, isRaw, nextGaps, planPull, planPurge, planUnpack, recentChanges, rowsByTable, sentColumns } from '../logic/journal.js';
-import { copyColumns, destRefs, followRenames, manualEdits, newColumnsMap, planConsolidation, rowNumbers } from '../logic/consolidation.js';
+import { copyColumns, destRefs, followRenames, manualEdits, newColumnsMap, planConsolidation, restoreActions, rowNumbers } from '../logic/consolidation.js';
 import { apply, docIdentity, fetchRows, gristFetch, readSchema, withLock } from '../grist.js';
 import { addDestColumnsActions, destColumns, receivedJournals, updateJournalNote, upgradeJournal } from './journals.js';
 import { syncRows } from '../source/synchro.js';
@@ -26,7 +26,7 @@ const DRIFT_KEPT = 20;
 
 // Ce que l'onglet montre. `results` : dernier passage par journal ({ at, rows, gaps } ; { at,
 // error, text } en cas d'erreur) et par table reçue (clé `journal|table` : { at, text, table,
-// stats, recent, labelCol, labelCols, types, drift, driftCells }, ou { at, error, text }).
+// stats, recent, dest, copyCols, labelCol, labelCols, types, drift, driftCells }, ou { at, error, text }).
 // `drift` : les premières lignes retouchées à la main (DRIFT_KEPT), `driftCells` : le nombre de
 // cellules retouchées en tout. `offers` : tables proposées par
 // journal ([{ table, columns, n }]). `readOnly` : le document refuse l'écriture (lecteur).
@@ -227,15 +227,36 @@ async function saveEntries(journal, note, updates) {
   if (note.mode === 'echange' && !note.retour) await wireExchange({ ...note, tables });
 }
 
+// Valeurs retouchées gardées pour la carte : les premières lignes, nommées, et le compte des cellules.
+const driftResult = (drift, labelCol) => ({
+  drift: drift.slice(0, DRIFT_KEPT).map(({ n, row, cells }) => ({ n, label: labelCol ? String(row[labelCol] ?? '') : '', cells })),
+  driftCells: drift.reduce((sum, d) => sum + d.cells.length, 0),
+});
+
 // Ce que la carte montre d'une table : compteurs, colonne qui nomme les lignes, historique,
 // valeurs retouchées à la main (`drift`).
 function tableResult({ entry, stats, copyCols, types, numbers, drift, error }, groups) {
   if (error) return { table: entry.table, error };
   const labelCol = copyCols.some(([from]) => from === entry.label) ? entry.label : (copyCols[0] || [])[0];
   const recent = recentChanges(groups.get(entry.table) || [], labelCol, state.lastVisit, Infinity, { copyCols, numbers });
-  const named = drift.slice(0, DRIFT_KEPT).map(({ n, row, cells }) => ({ n, label: labelCol ? String(row[labelCol] ?? '') : '', cells }));
-  const driftCells = drift.reduce((sum, d) => sum + d.cells.length, 0);
-  return { table: entry.table, stats, labelCol, labelCols: copyCols.map(([c]) => c), types, recent, drift: named, driftCells };
+  return { table: entry.table, stats, dest: entry.dest, copyCols, labelCol, labelCols: copyCols.map(([c]) => c), types, recent, ...driftResult(drift, labelCol) };
+}
+
+// « Corriger » : les cellules retouchées à la main d'une table reçue, relues au moment du clic,
+// reprennent la valeur de la SOURCE (la dernière version reçue). La carte est mise à jour aussitôt.
+export async function restoreSource(journal, table) {
+  const key = tableKey(journal, table);
+  const result = state.results.get(key);
+  if (!result || !result.copyCols) return;
+  const { dest, copyCols, labelCol } = result;
+  await withLock('gristsync-consolidation', async () => {
+    const journalRows = rowsByTable(expandRows(await fetchRows(journal))).get(table) || [];
+    await apply(restoreActions(manualEdits({ journalRows, destRows: await fetchRows(dest), copyCols }), dest));
+    const after = await fetchRows(dest);
+    const drift = manualEdits({ journalRows, destRows: after, copyCols });
+    lastRead.set(key, { numbers: rowNumbers(after), drift });
+    state.results.set(key, { ...state.results.get(key), ...driftResult(drift, labelCol) });
+  });
 }
 
 // Un passage sur un journal : déplier, recopier chaque table rangée, noter les tables proposées,

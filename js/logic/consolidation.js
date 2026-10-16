@@ -86,9 +86,10 @@ function noteReplaced(plan, copyCols, version, destRow) {
 }
 
 // Valeurs retouchées à la main dans la destination : cellules d'une ligne reçue qui diffèrent de
-// la dernière version reçue, lues après la recopie. Rend [{ key, n, row, cells: [[colonne du
-// journal, colonne d'ici, valeur d'ici, valeur de la SOURCE]] }] par numéro de ligne. Échange :
-// rien (une retouche y part vers l'autre document, ce n'est pas un écart).
+// la dernière version reçue, lues après la recopie. Rend [{ id, key, n, row, cells: [[colonne du
+// journal, colonne d'ici, valeur d'ici, valeur de la SOURCE]] }] par numéro de ligne (`id` : la
+// ligne d'ici, `row` : la version reçue). Échange : rien (une retouche y part vers l'autre
+// document, ce n'est pas un écart).
 export function manualEdits({ journalRows, destRows, copyCols, exchange = false }) {
   if (exchange) return [];
   const latest = latestByKey(journalRows);
@@ -99,9 +100,17 @@ export function manualEdits({ journalRows, destRows, copyCols, exchange = false 
     if (!version || isTrue(version.row[DELETE_COL])) continue;
     const cells = copyCols.filter(([from, to]) => !sameValue(version.row[from], row[to]))
       .map(([from, to]) => [from, to, row[to] ?? null, version.row[from] ?? null]);
-    if (cells.length) edits.push({ key: row[KEY_COL], n: numbers.get(row[KEY_COL]) || null, row: version.row, cells });
+    if (cells.length) edits.push({ id: row.id, key: row[KEY_COL], n: numbers.get(row[KEY_COL]) || null, row: version.row, cells });
   }
   return edits.sort((a, b) => (a.n || 0) - (b.n || 0));
+}
+
+// « Corriger » : remet dans les cellules retouchées (voir manualEdits) la valeur de la SOURCE, une
+// écriture par groupe de lignes retouchées sur les mêmes colonnes.
+export function restoreActions(edits, destTable) {
+  const groups = groupBy(edits, e => JSON.stringify(e.cells.map(([, to]) => to)));
+  return [...groups.values()].flatMap(list => chunk(list).map(part => ['BulkUpdateRecord', destTable, part.map(e => e.id),
+    Object.fromEntries(part[0].cells.map(([, to], i) => [to, part.map(e => e.cells[i][3])]))]));
 }
 
 // ---------------------------------------------------------------------------------------------
