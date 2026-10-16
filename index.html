@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://grist.numerique.gouv.fr https://docs.getgrist.com; connect-src 'self' https://grist.numerique.gouv.fr https://docs.getgrist.com; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Synchro</title>
+<link rel="stylesheet" href="css/style.css">
+<!-- grist-plugin-api.js écrit les couleurs du thème de Grist (que le widget n'emploie pas) dans
+     l'élément #grist-theme, qu'il crée en <style> s'il manque : la politique style-src 'self' le
+     refuserait. Un gabarit inerte du même nom reçoit ce texte sans effet. -->
+<template id="grist-theme"></template>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <h1 class="brand" data-i18n="app.title">Synchro</h1>
+  <nav id="tabs" class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="send" aria-selected="false" data-i18n="tab.send">Envoyer</button>
+    <button type="button" role="tab" data-tab="receive" aria-selected="false" data-i18n="tab.receive">Recevoir</button>
+    <button type="button" role="tab" data-tab="help" aria-selected="false" data-i18n="tab.help">Tutoriel</button>
+  </nav>
+  <button id="settings" type="button" class="icon-button" aria-label="Réglages" title="Réglages" data-i18n-label="settings.title"><span class="icon icon-settings" aria-hidden="true"></span></button>
+  <img id="brand-logo" src="img/grist-factory-logo.jpg" alt="Grist Factory" width="20" height="20">
+</header>
+<main id="main"></main>
+</body>
+</html>
