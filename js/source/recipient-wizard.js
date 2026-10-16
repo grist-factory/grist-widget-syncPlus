@@ -6,7 +6,7 @@ import { AUTHOR_COL, EXPORT_COL, JOURNAL_PREFIX, SYNC_TABLE, freeTableId, random
 import { buildInvitation, buildWebhookUrl, loopingTables, maskKey, parseFormLink, parseReply } from '../logic/codes.js';
 import { exportCondition, hookName } from '../logic/exports.js';
 import { createWebhook, docIdentity, fetchRows, readSchema } from '../grist.js';
-import { ensureForm, setWidgetPageCollapsed } from '../pages.js';
+import { ensureForm } from '../pages.js';
 import { formWhere, linkFigures, testUrl } from '../form-link.js';
 import { addDeleteColumns } from '../exchange.js';
 import { saveExport, syncRows, updateSourceNote } from './synchro.js';
@@ -26,7 +26,7 @@ const closeButton = () => [{ label: t('common.close'), kind: 'btn-primary' }];
 // `onClose` : appelé à la fermeture (l'onglet se redessine).
 export function recipientWizard(exp, pending, onClose) {
   const steps = ['send.step.options', 'send.step.invitation', 'send.step.reply', 'send.step.load'].map(k => t(k));
-  const ctx = { exp, steps, wizard: openWizard({ title: t('send.person.title', { name: exp.name }), steps, onClose }) };
+  const ctx = { exp, steps, onClose, wizard: openWizard({ title: t('send.person.title', { name: exp.name }), steps, onClose }) };
   if (!pending) return showOptions(ctx);
   return pending.journal && !pending.ready ? showBack(ctx, pending) : showReply(ctx, pending);
 }
@@ -109,7 +109,6 @@ async function showBack(ctx, inv) {
     if (!parseFormLink(input.value)) throw new Error('formLink');
     const retour = buildWebhookUrl(input.value, inv.journal);
     await testUrl(retour, inv.journal);
-    await setWidgetPageCollapsed(true);
     const secret = inv.withSecret ? randomHex(16) : '';
     const entry = { ...inv, hash: secret ? await sha256(secret) : '', ready: true };
     await updateSourceNote((note) => { note.invitations = note.invitations.map(i => (i.id === inv.id ? entry : i)); });
@@ -178,8 +177,9 @@ async function approve(ctx, inv, reply) {
   await showLoad(ctx);
 }
 
-// 4. Envoi : le branchement n'envoie que les modifications à venir ; proposer l'existant.
-async function showLoad({ exp, wizard }) {
+// 4. Envoi : le branchement n'envoie que les modifications à venir ; proposer l'existant. La
+// fenêtre se ferme pendant l'envoi, qui continue (voir resendTables) : l'onglet se redessine à la fin.
+async function showLoad({ exp, wizard, onClose }) {
   let total = 0;
   for (const { table } of exp.tables) total += (await fetchRows(table)).length;
   const report = el('div', { class: 'report' });
@@ -188,8 +188,11 @@ async function showLoad({ exp, wizard }) {
     return;
   }
   const send = async () => {
+    wizard.show(STEP.load, [message('ok', t('send.connected')), report, el('p', { class: 'muted small' }, t('send.load.background'))], closeButton());
+    report.replaceChildren(message('info', t('send.load.progress', { done: 0, total })));
     const n = await resendTables(exp.id, exp.tables.map(tb => tb.table), report);
-    wizard.show(STEP.load + 1, n === null ? message('info', t('send.load.queued')) : message('ok', t('send.done')), closeButton());
+    if (!report.isConnected) return onClose && onClose();
+    return wizard.show(STEP.load + 1, n === null ? message('info', t('send.load.queued')) : message('ok', t('send.done')), closeButton());
   };
   wizard.show(STEP.load, [message('ok', t('send.connected')), el('p', {}, t('send.load.body', { n: total })), report],
     [later, { label: t('send.load.ok'), kind: 'btn-primary', onClick: () => run(null, report, send) }]);

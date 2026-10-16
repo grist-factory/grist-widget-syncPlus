@@ -3,4 +3,4 @@
 // Content-Security-Policy de index.html), aux mêmes endroits.
 export const GRIST_ORIGINS = ['https://grist.numerique.gouv.fr', 'https://docs.getgrist.com'];
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.5.1';

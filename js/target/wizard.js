@@ -3,7 +3,7 @@
 import { APPLIED_COL, AUTHOR_COL, JOURNAL_PREFIX, LIST_COL, freeTableId, toTableId } from '../logic/common.js';
 import { buildReply, buildWebhookUrl, parseFormLink, parseInvitation } from '../logic/codes.js';
 import { apply, docIdentity, fetchRows, isOwner, readSchema } from '../grist.js';
-import { ensureForm, setWidgetPageCollapsed } from '../pages.js';
+import { ensureForm } from '../pages.js';
 import { formWhere, linkFigures, testUrl } from '../form-link.js';
 import { wireExchange } from '../exchange.js';
 import { createJournal, prepareDest, receivedJournals, updateJournalNote } from './journals.js';
@@ -153,7 +153,6 @@ async function showReply(ctx, { journal, note }, link) {
   if (!parseFormLink(link)) throw new Error('formLink');
   const url = buildWebhookUrl(link, journal);
   await testUrl(url, journal);
-  await setWidgetPageCollapsed(true);
   const identity = await docIdentity();
   const code = buildReply({
     id: note.id, secret: note.secret, url, retour: note.mode === 'echange' ? note.tables.map(tb => ({ table: tb.dest, dest: tb.table })) : null,

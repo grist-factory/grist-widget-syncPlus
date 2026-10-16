@@ -124,7 +124,7 @@ la seule personne concernée.
 
 - **Une clé par réception** : Grist donne une clé par page partagée, et cette clé lit aussi les
   colonnes des tables de tous les formulaires de la page, descriptions comprises (vérifié). Chaque
-  journal a donc son formulaire sur sa propre page, rangée sous celle du widget. Les formulaires
+  journal a donc son formulaire sur sa propre page, à la racine de la liste des pages. Les formulaires
   publiés par une version d'avant la 0.5 sur une même page sont signalés (« Lien commun à
   d'autres formulaires ») avec un bouton qui les sépare.
 - **Ce qu'elle permet** (vérifié) : ajouter des lignes au journal de sa réception ; lire les

@@ -30,13 +30,14 @@ function tooLarge(h) {
   return ['retrying', 'postponed'].includes(u.status) && (u.lastEventBatch || {}).httpStatus === 413;
 }
 
+// Un envoi met en général moins d'une seconde : les premières lectures sont rapprochées.
 async function waitForQueue(hookIds) {
   for (let i = 0; i < 60; i++) {
     const hooks = (await listWebhooks()).filter(h => hookIds.includes(h.id));
     if (hooks.some(tooLarge)) throw new Error('tooLarge');
     if (!hooks.some(h => h.usage && h.usage.numWaiting)) return;
     await beat();
-    await sleep(1500);
+    await sleep(i < 3 ? 500 : 1500);
   }
   throw new Error('queueStuck');
 }

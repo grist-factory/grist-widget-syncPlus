@@ -120,14 +120,14 @@ quelle colonne rattacher les lignes déjà là (voir [Une table ajoutée à l'ex
 ![Destinations](images/08-cible-destinations.png)
 
 Le widget crée un journal pour l'export, `Journal_<export>` (dans « Données source »), et publie
-son formulaire de réception sur sa propre page, `Journal_<export>`, rangée sous celle du widget.
+son formulaire de réception sur sa propre page, `Journal_<export>`, en bas de la liste des pages.
 
 ### 8. Copier le lien du formulaire
 
-L'assistant montre où cliquer : ouvrir la page du formulaire, sous celle du widget, puis dans sa
+L'assistant montre où cliquer : ouvrir la page du formulaire, en bas de la liste des pages, puis dans sa
 carte **Partager** et **Copier le lien** ; coller ce lien dans le widget, **Tester le lien**. Le
 widget vérifie que le lien écrit bien dans le journal de cette réception (le lien d'un autre
-formulaire ou d'un autre document est refusé), puis replie sa page. Un seul lien sert pour toutes
+formulaire ou d'un autre document est refusé). Un seul lien sert pour toutes
 les tables de l'export, et pour celles qui s'y ajouteront.
 
 ![Lien](images/09-cible-lien.png)
@@ -264,7 +264,7 @@ l'autre, sans revenir ; quand la même ligne change des deux côtés, **la plus 
 Il faut un **propriétaire** de chaque côté (chacun envoie par son propre webhook).
 
 1. SOURCE : créer l'export, puis **Ajouter un destinataire** (le premier de l'export), mode
-   **Échange**. Le widget publie un formulaire de retour sur sa propre page, sous celle du widget :
+   **Échange**. Le widget publie un formulaire de retour sur sa propre page, en bas de la liste des pages :
    copier son lien et le coller, il part dans l'invitation (qui devient un droit d'écriture).
 
    ![Mode Échange](images/20-echange-mode.png)

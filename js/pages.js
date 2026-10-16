@@ -5,22 +5,6 @@ import { randomHex } from './logic/common.js';
 
 const published = section => JSON.parse(section.shareOptions || '{}').publish === true;
 
-// Page qui porte ce widget : la seule section « personnalisée » dont l'adresse est celle de cette
-// page ; sinon (aucune ou plusieurs), 0.
-function widgetViewRef(sections) {
-  const here = location.origin + location.pathname;
-  const mine = sections.filter((section) => {
-    if (section.parentKey !== 'custom') return false;
-    try {
-      const url = new URL(JSON.parse(JSON.parse(section.options || '{}').customView || '{}').url);
-      return url.origin + url.pathname === here;
-    } catch (e) {
-      return false;
-    }
-  });
-  return mine.length === 1 ? mine[0].parentId : 0;
-}
-
 // ---------------------------------------------------------------------------------------------
 // Formulaires de réception
 
@@ -29,8 +13,8 @@ function widgetViewRef(sections) {
 // la note) des tables de tous les formulaires de la page (vérifié) : une page par journal, et
 // chaque expéditeur n'atteint que le sien. Mêmes actions que le bouton « Publier » de Grist ; le
 // serveur crée alors la clé, que le widget ne peut pas lire : la personne copie le lien depuis la
-// carte du formulaire. Idempotent. La page, nommée comme le journal, est rangée sous celle du
-// widget, dépliée pour la montrer.
+// carte du formulaire. Idempotent. La page, nommée comme le journal, reste à la racine de la liste
+// des pages, là où Grist la crée (en fin de liste) : on la trouve sans déplier la page du widget.
 export async function ensureForm(tableId) {
   const table = (await readSchema()).table(tableId);
   let section = (await fetchRows('_grist_Views_section')).find(s => s.parentKey === 'form' && s.tableRef === table.id);
@@ -38,7 +22,6 @@ export async function ensureForm(tableId) {
     const created = (await apply([['CreateViewSection', table.id, 0, 'form', null, null]])).retValues[0];
     section = { id: created.sectionRef, parentId: created.viewRef, shareOptions: '' };
     await apply([['UpdateRecord', '_grist_Views', created.viewRef, { name: tableId }]]);
-    await nestUnderWidget(created.viewRef);
   }
   const page = (await fetchRows('_grist_Pages')).find(p => p.viewRef === section.parentId);
   if (!page.shareRef) {
@@ -48,32 +31,6 @@ export async function ensureForm(tableId) {
   if (!published(section)) {
     await apply([['UpdateRecord', '_grist_Views_section', section.id, { shareOptions: JSON.stringify({ form: true, publish: true }) }]]);
   }
-}
-
-// Range la page `viewRef` sous la page du widget, après ses autres sous-pages, et déplie celle-ci.
-async function nestUnderWidget(viewRef) {
-  const [pages, sections] = await Promise.all([fetchRows('_grist_Pages'), fetchRows('_grist_Views_section')]);
-  const page = pages.find(p => p.viewRef === viewRef);
-  const others = pages.filter(p => p !== page).sort((a, b) => a.pagePos - b.pagePos);
-  const at = others.findIndex(p => p.viewRef === widgetViewRef(sections));
-  if (!page || at < 0) return;
-  const parent = others[at];
-  let end = at;
-  while (end + 1 < others.length && others[end + 1].indentation > parent.indentation) end++;
-  const next = others[end + 1];
-  const pagePos = next ? (others[end].pagePos + next.pagePos) / 2 : others[end].pagePos + 1;
-  await apply([['UpdateRecord', '_grist_Pages', page.id, { indentation: parent.indentation + 1, pagePos }]]);
-  await setWidgetPageCollapsed(false);
-}
-
-// Replie (ou déplie) la page du widget dans la liste des pages : ses sous-pages, les formulaires,
-// ne se voient plus. Fait une fois, quand un lien vient d'être donné.
-export async function setWidgetPageCollapsed(collapsed) {
-  const [pages, sections] = await Promise.all([fetchRows('_grist_Pages'), fetchRows('_grist_Views_section')]);
-  const page = pages.find(p => p.viewRef === widgetViewRef(sections));
-  if (!page) return;
-  const options = JSON.parse(page.options || '{}');
-  if (Boolean(options.collapsed) !== collapsed) await apply([['UpdateRecord', '_grist_Pages', page.id, { options: JSON.stringify({ ...options, collapsed }) }]]);
 }
 
 // Formulaire publié de chaque table : { section, viewRef, name (de la page), shared (autres

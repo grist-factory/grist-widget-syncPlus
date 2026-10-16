@@ -72,20 +72,20 @@ const SECTIONS = [
     text: [[
       'Pour chaque table de l’export : Nouvelle table (nom modifiable) ou une table du document.',
       'Pour une table existante, dire où va chaque colonne et par quelle colonne rattacher les lignes déjà là : une ligne dont cette colonne a la même valeur est mise à jour au lieu d’être doublée.',
-      'Le widget crée un journal pour l’export et publie son formulaire de réception sur sa propre page, rangée sous celle du widget.',
+      'Le widget crée un journal pour l’export et publie son formulaire de réception sur sa propre page, en bas de la liste des pages.',
     ], [
       'For each table of the export: New table (name editable) or a table of the document.',
       'For an existing table, say where each column goes and which column attaches rows already there: a row with the same value is updated instead of duplicated.',
-      'The widget creates a journal for the export and publishes its receiving form on its own page, under the widget’s page.',
+      'The widget creates a journal for the export and publishes its receiving form on its own page, at the bottom of the page list.',
     ]],
     images: ['08-cible-destinations', '08b-cible-colonnes'] },
   { id: 't-link', role: 'target',
     title: ['Copier le lien du formulaire', 'Copy the form link'],
     text: [[
-      'Ouvrir la page du formulaire, sous celle du widget, puis dans sa carte : Partager, Copier le lien. Coller ce lien dans le widget, Tester le lien : le widget vérifie qu’il écrit bien dans le journal de cette réception. Il sert pour toutes les tables de l’export, et pour celles qui s’y ajouteront. Ensuite, la page du widget se replie.',
+      'Ouvrir la page du formulaire, en bas de la liste des pages, puis dans sa carte : Partager, Copier le lien. Coller ce lien dans le widget, Tester le lien : le widget vérifie qu’il écrit bien dans le journal de cette réception. Il sert pour toutes les tables de l’export, et pour celles qui s’y ajouteront.',
       'Ce lien est un droit d’écriture dans votre journal : ne le diffusez pas ailleurs. Chaque réception a le sien.',
     ], [
-      'Open the form’s page, under the widget’s page, then in its card: Share, Copy link. Paste it in the widget, Test the link: the widget checks that it writes into this reception’s journal. It works for every table of the export, and those added later. Then the widget’s page folds up.',
+      'Open the form’s page, at the bottom of the page list, then in its card: Share, Copy link. Paste it in the widget, Test the link: the widget checks that it writes into this reception’s journal. It works for every table of the export, and those added later.',
       'This link is a write right into your journal: do not share it elsewhere. Each reception has its own.',
     ]],
     images: ['img/aide-partager.png', 'img/aide-copier.png', '09-cible-lien'] },

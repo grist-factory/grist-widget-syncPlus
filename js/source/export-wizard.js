@@ -126,9 +126,12 @@ async function save(ctx, name, report) {
     return;
   }
   if (name !== exp.name) for (const h of exp.recipients) await renameWebhook(h.id, hookName(name, id));
+  // Fenêtre fermée pendant le renvoi, qui continue : l'onglet se redessine à la fin.
+  if (changed.length) wizard.show(3, [report, el('p', { class: 'muted small' }, t('send.load.background'))], [{ label: t('common.close'), kind: 'btn-primary' }]);
   const n = changed.length ? await resendTables(id, changed, report) : 0;
+  if (changed.length && !report.isConnected) return ctx.onClose && ctx.onClose();
   const saved = n === null ? message('info', t('send.load.queued')) : message('ok', n ? t('send.edit.saved', { n }) : t('send.edit.savedNone'));
-  wizard.show(3, saved, [{ label: t('common.close'), kind: 'btn-primary' }]);
+  return wizard.show(3, saved, [{ label: t('common.close'), kind: 'btn-primary' }]);
 }
 
 // Filtre de lignes d'une table, facultatif : une colonne et la valeur qu'ont les lignes envoyées.

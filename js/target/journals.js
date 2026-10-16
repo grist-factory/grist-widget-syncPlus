@@ -57,13 +57,15 @@ export async function upgradeJournal(schema, journal) {
 export const destColumns = columns => columns.filter(c => ![KEY_COL, ORDER_COL, DELETE_COL].includes(c.id));
 
 // CIBLE : colonnes envoyées qui manquent à la destination, sous le nom choisi dans `map`
-// (colonne envoyée -> colonne de la destination). La clé `id_sync` en fait partie.
+// (colonne envoyée -> colonne de la destination). La clé `id_sync` en fait partie. Les colonnes de
+// données s'affichent dans les vues de la table (`AddColumn` ne les mettrait que dans « Données
+// source » et la fiche : une colonne ajoutée plus tard à l'export arrivait cachée) ; la clé non.
 export function addDestColumnsActions(schema, dest, columns, map = {}) {
   const have = new Set((schema.columns(dest) || []).map(c => c.colId));
   return [...destColumns(columns), { id: KEY_COL, type: 'Text', label: KEY_COL }]
-    .map(({ id, type, label }) => ({ id: map[id] || id, type, label: map[id] ? map[id] : label }))
+    .map(({ id, type, label }) => ({ id: map[id] || id, type, label: map[id] ? map[id] : label, key: id === KEY_COL }))
     .filter(c => !have.has(c.id))
-    .map(({ id, ...info }) => ['AddColumn', dest, id, { ...info, isFormula: false }]);
+    .map(({ id, key, ...info }) => [key ? 'AddColumn' : 'AddVisibleColumn', dest, id, { ...info, isFormula: false }]);
 }
 
 export async function createJournal(journal, note) {
