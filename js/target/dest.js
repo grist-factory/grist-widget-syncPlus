@@ -16,13 +16,14 @@ import { t } from '../i18n.js';
 export function destField(schema, table) {
   const tables = schema.tableIds.filter(isUserTable);
   const name = el('input', { type: 'text', class: 'input', value: toTableId(table), 'aria-label': t('recv.dest.name', { table }) });
+  const nameBox = el('div', { class: 'dest-pick' }, el('span', { class: 'muted small' }, t('recv.dest.nameLabel')), name);
   const field = pickField({
     label: table, value: '',
     items: [{ value: '', label: t('recv.dest.new') }, ...tables.map(id => ({ value: id, label: id }))],
-    onChange: (v) => { name.classList.toggle('hidden', v !== ''); },
+    onChange: (v) => { nameBox.classList.toggle('hidden', v !== ''); },
   });
   const typed = () => toTableId(name.value, table);
-  return { node: el('div', {}, field, name), dest: () => field.value() || schema.resolve(typed()) || typed() };
+  return { node: el('div', { class: 'dest-pick' }, field, nameBox), dest: () => field.value() || schema.resolve(typed()) || typed() };
 }
 
 // Colonne qui reçoit chaque colonne envoyée (la même, une autre, ou une nouvelle), et colonne

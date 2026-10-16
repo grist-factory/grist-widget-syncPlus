@@ -133,7 +133,7 @@ export async function renderSource(root = container) {
     chargeNotice(state.charge),
     out,
     cards.length ? el('div', { class: 'cards' }, cards) : el('p', { class: 'muted' }, t('send.empty')),
-    roleGuide({ you: 'source', open: !cards.length })].filter(Boolean));
+    roleGuide({ you: 'source' })].filter(Boolean));
   // Échange qui attend le lien de son formulaire de retour (page fermée en route) : l'assistant
   // reprend à cette étape, une fois par chargement.
   const pending = state.exports.flatMap(exp => exp.invitations.filter(inv => inv.journal && !inv.ready).map(inv => [exp, inv]))[0];

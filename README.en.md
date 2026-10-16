@@ -11,7 +11,7 @@ No server to host, no dependencies, and only the columns you pick leave the docu
 
 <img src="docs/images/14-cible-historique.png" width="820" alt="The widget in the receiving document: the “Annuaire” export is up to date and lists the rows added, changed and deleted since the last visit">
 
-<sub>Version 0.5.2 · Grist 1.7.11 or later · GPL-3.0 license · Grist Factory</sub>
+<sub>Version 0.5.3 · Grist 1.7.11 or later · GPL-3.0 license · Grist Factory</sub>
 
 </div>
 
@@ -84,7 +84,7 @@ own picture help. The same walkthrough in French: [`docs/04-tutoriel.md`](docs/0
 
 - **Exports**: several per document, each with its tables, columns and a row filter; editing an
   export applies to all its recipients.
-- **Three modes per recipient**: *with reply* (two codes, Grist does the sending even with the
+- **Three modes per recipient**: *one way* (two codes, Grist does the sending even with the
   page closed), *Exchange* (both ways, the most recent change wins) and *public link* (a single
   code, the TARGET reads what the SOURCE publishes).
 - **Faithful copy**: additions, changes, deletions, values coming from another table (Reference,
@@ -107,7 +107,7 @@ own picture help. The same walkthrough in French: [`docs/04-tutoriel.md`](docs/0
 <br><sub>In the SOURCE, each recipient has their own line: pause, resume, revoke.</sub>
 </td>
 <td width="50%" valign="top">
-<img src="docs/images/readme/20-echange-mode.png" alt="Adding a recipient: choosing the mode, with reply, public link or Exchange">
+<img src="docs/images/readme/20-echange-mode.png" alt="Adding a recipient: choosing the mode, one way, both ways (Exchange) or public link">
 <br><sub>Three modes per recipient, including two-way Exchange.</sub>
 </td>
 </tr>

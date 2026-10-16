@@ -46,18 +46,43 @@ async function showTables(ctx) {
     ctx.exp ? null : roleGuide({ you: 'source', current: 0 })], [cancel, next]);
 }
 
-// Bloc d'une table à l'étape Colonnes : ses colonnes (toutes par défaut) et son filtre de lignes.
+// Bloc d'une table à l'étape Colonnes : par défaut toutes ses colonnes et toutes ses lignes, dit
+// en une ligne ; deux boutons ouvrent le choix des colonnes et le filtre des lignes (ouverts
+// d'emblée quand l'export modifié les précise déjà).
 function columnsBlock(ctx, schema, table, relayed) {
   const all = exportableColumns(schema.columns(table));
   const usable = all.filter(c => !c.blocked);
   if (!ctx.selected.has(table)) ctx.selected.set(table, usable.map(c => c.id));
   const blocked = all.filter(c => c.blocked).map(c => c.id);
-  return el('div', { class: 'form' }, el('h3', {}, table),
-    relayed ? message('info', t('send.columns.relay')) : null,
+  const summary = el('p', { class: 'small' });
+  const describe = () => {
+    const n = ctx.selected.get(table).length;
+    const filter = ctx.filters.get(table);
+    summary.textContent = `${n === usable.length ? t('send.columns.all', { n }) : t('send.columns.some', { n, total: usable.length })} · ${
+      filter ? t('send.rows.filtered', { column: filter.visible || filter.id, value: filter.value }) : t('send.rows.all')}`;
+  };
+  const columns = el('div', { class: 'form' },
     checkList({ items: usable.map(c => ({ value: c.id, label: columnLabel(c), hint: typeName(c.source) })),
-      checked: ctx.selected.get(table), label: table, onChange: (values) => { ctx.selected.set(table, values); } }),
-    blocked.length ? el('p', { class: 'muted small' }, t('send.columns.blocked', { cols: blocked.join(', ') })) : null,
-    filterField(table, usable, ctx.filters.get(table), (filter) => { ctx.filters.set(table, filter); }));
+      checked: ctx.selected.get(table), label: table, onChange: (values) => { ctx.selected.set(table, values); describe(); } }),
+    blocked.length ? el('p', { class: 'muted small' }, t('send.columns.blocked', { cols: blocked.join(', ') })) : null);
+  const rows = el('div', {}, filterField(table, usable, ctx.filters.get(table), (filter) => { ctx.filters.set(table, filter); describe(); }));
+  describe();
+  return el('div', { class: 'form table-block' }, el('h3', {}, table),
+    relayed ? message('info', t('send.columns.relay')) : null, summary,
+    el('div', { class: 'block-actions' },
+      togglePart(columns, t('send.columns.pick'), ctx.selected.get(table).length !== usable.length),
+      togglePart(rows, t('send.rows.pick'), Boolean(ctx.filters.get(table)))),
+    columns, rows);
+}
+
+// Bouton qui ouvre ou ferme une partie de la fenêtre.
+function togglePart(part, label, open) {
+  part.classList.toggle('hidden', !open);
+  const button = el('button', { class: 'btn btn-small', type: 'button', 'aria-expanded': String(open), onclick: () => {
+    const now = part.classList.toggle('hidden') === false;
+    button.setAttribute('aria-expanded', String(now));
+  } }, label);
+  return button;
 }
 
 // 2. Colonnes, par table, et ce que le widget ajoutera pour la synchro.
@@ -76,8 +101,8 @@ async function showColumns(ctx) {
   ctx.wizard.show(1, [el('p', {}, t('send.columns.help')),
     removed.length ? message('warn', t('send.edit.removed', { tables: removed.join(', ') })) : null,
     ...blocks,
-    adds.length ? message('info', t('send.check.missing', { items: adds.join(', ') })) : null, report, stepHelp(['s-columns'])], [
-    { label: t('common.back'), onClick: () => showTables(ctx) },
+    adds.length ? el('p', { class: 'muted small' }, t('send.check.missing', { items: adds.join(', ') })) : null, report, stepHelp(['s-columns'])], [
+    { label: t('common.back'), back: true, onClick: () => showTables(ctx) },
     { label: t('common.next'), kind: 'btn-primary', onClick: () => run(null, report, next) }]);
 }
 
@@ -87,7 +112,7 @@ function showName(ctx) {
   const nameInput = el('input', { type: 'text', class: 'input', id: 'gristsync-export-name', value: ctx.exp ? ctx.exp.name : fallback });
   const report = el('div', { class: 'report' });
   ctx.wizard.show(2, [el('label', { for: 'gristsync-export-name' }, t('send.name')), nameInput, el('p', { class: 'muted small' }, t('send.name.help')), report], [
-    { label: t('common.back'), onClick: () => run(null, report, () => showColumns(ctx)) },
+    { label: t('common.back'), back: true, onClick: () => run(null, report, () => showColumns(ctx)) },
     { label: ctx.exp ? t('common.save') : t('send.create'), kind: 'btn-primary', onClick: () => run(null, report, () => save(ctx, nameInput.value.trim() || fallback, report)) }]);
 }
 

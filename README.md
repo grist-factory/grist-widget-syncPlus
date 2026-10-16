@@ -11,7 +11,7 @@ Sans serveur à héberger, sans dépendance, et seules les colonnes que vous cho
 
 <img src="docs/images/14-cible-historique.png" width="820" alt="Le widget dans le document qui reçoit : l'export « Annuaire » est à jour et liste les lignes ajoutées, modifiées et supprimées depuis la dernière visite">
 
-<sub>Version 0.5.2 · Grist 1.7.11 ou plus récent · licence GPL-3.0 · Grist Factory</sub>
+<sub>Version 0.5.3 · Grist 1.7.11 ou plus récent · licence GPL-3.0 · Grist Factory</sub>
 
 </div>
 
@@ -87,7 +87,7 @@ aussi dans le widget (onglet **Tutoriel**), et chaque étape des assistants a so
 
 - **Exports** : plusieurs par document, chacun avec ses tables, ses colonnes et un filtre de
   lignes ; une modification de l'export vaut pour tous ses destinataires.
-- **Trois modes par destinataire** : *avec réponse* (deux codes, l'envoi est fait par Grist même
+- **Trois modes par destinataire** : *dans un seul sens* (deux codes, l'envoi est fait par Grist même
   page fermée), *Échange* (dans les deux sens, la modification la plus récente l'emporte) et
   *lien public* (un seul code, la CIBLE lit ce que la SOURCE publie).
 - **Recopie fidèle** : ajouts, modifications, suppressions, valeurs venues d'une autre table
@@ -111,7 +111,7 @@ aussi dans le widget (onglet **Tutoriel**), et chaque étape des assistants a so
 <br><sub>Dans la SOURCE, chaque destinataire a sa ligne : pause, reprise, révocation.</sub>
 </td>
 <td width="50%" valign="top">
-<img src="docs/images/readme/20-echange-mode.png" alt="Ajout d'un destinataire : choix du mode, avec réponse, lien public ou Échange">
+<img src="docs/images/readme/20-echange-mode.png" alt="Ajout d'un destinataire : choix du mode, dans un seul sens, dans les deux sens (Échange) ou lien public">
 <br><sub>Trois modes par destinataire, dont l'Échange dans les deux sens.</sub>
 </td>
 </tr>

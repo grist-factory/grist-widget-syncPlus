@@ -57,7 +57,7 @@ export function openModal({ title, body, buttons = [], width = 480, onClose }) {
     // brancherait deux fois le même destinataire).
     setButtons(list) {
       footer.replaceChildren(...list.map(b => el('button', {
-        class: `btn ${b.kind || ''}`, type: 'button', disabled: b.disabled,
+        class: `btn ${b.kind || ''}${b.back ? ' btn-back' : ''}`, type: 'button', disabled: b.disabled,
         onclick: e => (b.onClick ? busy(e.currentTarget, () => b.onClick(modal)) : modal.close()),
       }, b.label)));
     },
@@ -100,7 +100,7 @@ document.addEventListener('keydown', (event) => {
 export function openWizard({ title, steps, onClose }) {
   const stepList = el('ol', { class: 'steps' });
   const content = el('div', { class: 'form' });
-  const modal = openModal({ title, body: [stepList, content], onClose });
+  const modal = openModal({ title, body: [stepList, content], onClose, width: 720 });
   let shown = -1;
   return {
     close: () => modal.close(),

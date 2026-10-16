@@ -6,14 +6,14 @@ import { AUTHOR_COL, EXPORT_COL, JOURNAL_PREFIX, SYNC_TABLE, freeTableId, random
 import { buildInvitation, buildWebhookUrl, loopingTables, maskKey, parseFormLink, parseReply } from '../logic/codes.js';
 import { exportCondition, hookName } from '../logic/exports.js';
 import { createWebhook, docIdentity, fetchRows, readSchema } from '../grist.js';
-import { ensureForm } from '../pages.js';
+import { ensureForm, removeTechnicalTables } from '../pages.js';
 import { formWhere, linkFigures, testUrl } from '../form-link.js';
 import { addDeleteColumns } from '../exchange.js';
 import { saveExport, syncRows, updateSourceNote } from './synchro.js';
 import { createJournal, receivedDests, updateJournalNote } from '../target/journals.js';
 import { resendTables } from './resend.js';
 import { handoff, publicCode } from './actions.js';
-import { copyField, el, message, openWizard, run } from '../ui.js';
+import { confirmDialog, copyField, el, message, openWizard, run } from '../ui.js';
 import { roleGuide } from '../guide.js';
 import { stepHelp } from '../tutorial.js';
 import { t } from '../i18n.js';
@@ -21,12 +21,13 @@ import { t } from '../i18n.js';
 const STEP = { options: 0, invitation: 1, reply: 2, load: 3 };
 const now = () => Date.now() / 1000;
 const later = { label: t('common.later') };
+const back = onClick => ({ label: t('common.back'), back: true, onClick });
 const closeButton = () => [{ label: t('common.close'), kind: 'btn-primary' }];
 
 // `onClose` : appelé à la fermeture (l'onglet se redessine).
 export function recipientWizard(exp, pending, onClose) {
   const steps = ['send.step.options', 'send.step.invitation', 'send.step.reply', 'send.step.load'].map(k => t(k));
-  const ctx = { exp, steps, onClose, wizard: openWizard({ title: t('send.person.title', { name: exp.name }), steps, onClose }) };
+  const ctx = { exp, steps, onClose, codes: new Map(), wizard: openWizard({ title: t('send.person.title', { name: exp.name }), steps, onClose }) };
   if (!pending) return showOptions(ctx);
   return pending.journal && !pending.ready ? showBack(ctx, pending) : showReply(ctx, pending);
 }
@@ -46,13 +47,15 @@ function showOptions(ctx) {
   const report = el('div', { class: 'report' });
   const mode = () => (document.querySelector('input[name="gristsync-mode"]:checked') || {}).value;
   const exchangeOk = !exp.recipients.length && !exp.invitations.length && !exp.public;
+  // Le parcours principal d'abord (un seul sens, avec secret) ; les autres modes, plus discrets.
   ctx.wizard.show(STEP.options, [
-    message('info', t('send.person.tables', { tables: exp.tables.map(tb => tb.table).join(', ') })),
+    el('p', { class: 'muted small' }, t('send.person.tables', { tables: exp.tables.map(tb => tb.table).join(', ') })),
     el('p', { class: 'field-title', id: 'gristsync-mode-title' }, t('send.mode')),
     el('div', { class: 'form', role: 'radiogroup', 'aria-labelledby': 'gristsync-mode-title' },
       radio('reponse', t('send.mode.reply'), true, false),
-      radio('public', exp.public ? t('send.mode.publicDone') : t('send.mode.public'), false, exp.public),
-      radio('echange', exchangeOk ? t('send.mode.echange') : t('send.mode.echange.off'), false, !exchangeOk)),
+      el('p', { class: 'muted small' }, t('send.mode.others')),
+      radio('echange', exchangeOk ? t('send.mode.echange') : t('send.mode.echange.off'), false, !exchangeOk),
+      radio('public', exp.public ? t('send.mode.publicDone') : t('send.mode.public'), false, exp.public)),
     secretPart, parts.public, parts.echange, report, stepHelp(['s-options', 'public']), roleGuide({ you: 'source', current: 0 }),
   ], [{ label: t('common.cancel') }, { label: t('send.invite'), kind: 'btn-primary', onClick: () => run(null, report, () => invite(ctx, mode() !== 'public' && secretBox.checked, mode())) }]);
 }
@@ -75,7 +78,7 @@ async function invitePublic({ exp, wizard, steps }) {
   const code = await publicCode(exp);
   wizard.setSteps(steps.slice(0, 2));
   wizard.show(STEP.invitation, [el('p', {}, t('send.public.help')), copyField(code), handoff('public', code),
-    message('warn', t('send.public.turnOn')), roleGuide({ you: 'source', mode: 'public', current: 1, open: true }), stepHelp(['public'])], closeButton());
+    message('warn', t('send.public.turnOn')), roleGuide({ you: 'source', mode: 'public', current: 1 }), stepHelp(['public'])], closeButton());
 }
 
 async function showInvitation(ctx, entry, secret, retour = '') {
@@ -84,9 +87,34 @@ async function showInvitation(ctx, entry, secret, retour = '') {
   const [{ origin, docId }, rows] = await Promise.all([docIdentity(), syncRows()]);
   const email = (rows.find(r => r[EXPORT_COL] === exp.id) || {})[AUTHOR_COL] || '';
   const code = buildInvitation({ id: entry.id, exportId: exp.id, name: exp.name, origin, secret, from: { email, docId }, tables: exp.tables, retour });
-  ctx.wizard.show(STEP.invitation, [el('p', {}, t('send.invite.help')), copyField(code), handoff(mode, code),
-    roleGuide({ you: 'source', mode, current: 1, open: true }), stepHelp(['s-invite', 't-code', 't-dest', 't-link', 't-reply'])],
-  [later, { label: t('send.reply.ready'), kind: 'btn-primary', onClick: () => showReply(ctx, entry) }]);
+  ctx.codes.set(entry.id, { secret, retour });
+  const report = el('div', { class: 'report' });
+  ctx.wizard.show(STEP.invitation, [el('p', {}, t('send.invite.help')), copyField(code), handoff(mode, code), report,
+    roleGuide({ you: 'source', mode, current: 1 }), stepHelp(['s-invite', 't-code', 't-dest', 't-link', 't-reply'])],
+  [back(() => run(null, report, () => backToOptions(ctx, entry))), later, { label: t('send.reply.ready'), kind: 'btn-primary', onClick: () => showReply(ctx, entry) }]);
+}
+
+// Retour aux options : l'invitation est annulée (son code ne sert plus), avec le journal de retour
+// d'un Échange ; la personne en crée une autre.
+async function backToOptions(ctx, inv) {
+  if (!(await confirmDialog({ title: t('send.backOptions.title'), body: t('send.backOptions.body'), confirmLabel: t('common.back') }))) return;
+  await updateSourceNote((note) => { note.invitations = note.invitations.filter(i => i.id !== inv.id); });
+  if (inv.journal) await removeTechnicalTables([inv.journal]);
+  showOptions(ctx);
+}
+
+// Retour à l'invitation depuis l'étape Réponse : le même code s'il a été fait dans cette fenêtre ;
+// sinon il est refait (ni le code ni son secret ne sont gardés), et un nouveau secret rend l'ancien
+// code inutile : la personne le confirme. Un Échange le refait par son lien de retour.
+async function backToInvitation(ctx, inv) {
+  const kept = ctx.codes.get(inv.id);
+  if (kept) return showInvitation(ctx, inv, kept.secret, kept.retour);
+  if (inv.hash && !(await confirmDialog({ title: t('send.newCode.title'), body: t('send.newCode.body'), confirmLabel: t('send.newCode.ok') }))) return null;
+  if (inv.journal) return showBack(ctx, inv);
+  const secret = inv.hash ? randomHex(16) : '';
+  const entry = { ...inv, hash: secret ? await sha256(secret) : '' };
+  await updateSourceNote((note) => { note.invitations = note.invitations.map(i => (i.id === inv.id ? entry : i)); });
+  return showInvitation(ctx, entry, secret);
 }
 
 // 2 bis. Échange : un journal de retour, que la CIBLE remplira par le formulaire publié ici, sur
@@ -116,7 +144,7 @@ async function showBack(ctx, inv) {
   };
   ctx.wizard.show(STEP.invitation, [el('p', {}, t('send.back.help', { where: await formWhere(inv.journal) })), ...linkFigures(), input, report,
     roleGuide({ you: 'source', mode: 'echange', current: 0 })],
-  [later, { label: t('recv.link.check'), kind: 'btn-primary', onClick: () => run(null, report, check) }]);
+  [back(() => run(null, report, () => backToOptions(ctx, inv))), later, { label: t('recv.link.check'), kind: 'btn-primary', onClick: () => run(null, report, check) }]);
 }
 
 // 3. Réponse : vérifier, montrer la fiche, approuver. La réponse doit désigner cette invitation
@@ -128,9 +156,10 @@ function showReply(ctx, inv) {
   const check = async () => {
     const reply = await checkReply(ctx.exp, inv, area.value);
     report.replaceChildren(...replyFiche(reply, (await docIdentity()).docId));
-    ctx.wizard.show(STEP.reply, body, [later, { label: t('send.reply.approve'), kind: 'btn-primary', onClick: () => run(null, report, () => approve(ctx, inv, reply)) }]);
+    ctx.wizard.show(STEP.reply, body, [toInvitation, later, { label: t('send.reply.approve'), kind: 'btn-primary', onClick: () => run(null, report, () => approve(ctx, inv, reply)) }]);
   };
-  ctx.wizard.show(STEP.reply, body, [later, { label: t('send.reply.check'), kind: 'btn-primary', onClick: () => run(null, report, check) }]);
+  const toInvitation = back(() => run(null, report, () => backToInvitation(ctx, inv)));
+  ctx.wizard.show(STEP.reply, body, [toInvitation, later, { label: t('send.reply.check'), kind: 'btn-primary', onClick: () => run(null, report, check) }]);
 }
 
 // Réponse lue et contrôlée : même instance, cette invitation, même secret, pas de boucle ; un

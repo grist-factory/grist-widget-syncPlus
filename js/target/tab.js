@@ -63,7 +63,7 @@ export async function renderTarget(root = container) {
     state.readOnly ? message('warn', t('common.readonly')) : null,
     out,
     cards.length ? el('div', { class: 'cards' }, cards, el('p', { class: 'muted small' }, t('recv.auto'))) : el('p', { class: 'muted' }, t('recv.empty')),
-    roleGuide({ you: 'target', open: !cards.length })].filter(Boolean));
+    roleGuide({ you: 'target' })].filter(Boolean));
   if (!state.readOnly) await openPending(groups);
 }
 

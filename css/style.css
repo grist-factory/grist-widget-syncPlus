@@ -132,6 +132,14 @@ main { padding: 12px; max-width: 760px; margin: 0 auto; }
 .radios { display: flex; gap: 14px; }
 .radios label { font-weight: 400; display: flex; gap: 5px; align-items: center; }
 .dest-row { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+.dest-grid { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 8px 12px; align-items: start; margin: 4px 0 8px; }
+.dest-grid .dest-head { font-size: 12px; color: var(--text-muted); }
+.dest-grid .dest-from { padding-top: 7px; font-weight: 600; }
+.dest-grid .dest-pick { display: grid; gap: 4px; }
+/* Une table de l'export : un résumé, deux boutons pour préciser colonnes et lignes */
+.table-block { border: 1px solid var(--border); border-radius: var(--radius-frame); padding: 10px 12px; }
+.table-block h3 { margin: 0; }
+.table-block .block-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .fiche { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 6px 0; }
 .fiche dt { color: var(--text-muted); }
 .fiche dd { margin: 0; overflow-wrap: anywhere; }
@@ -157,6 +165,8 @@ main { padding: 12px; max-width: 760px; margin: 0 auto; }
   max-height: calc(100vh - 24px); display: flex; flex-direction: column; }
 .modal-400 { max-width: 400px; }
 .modal-480 { max-width: 480px; }
+/* Assistants : larges sur grand écran, toute la place (moins la marge) dans un petit panneau */
+.modal-720 { max-width: 720px; }
 .modal-title { font-size: 15px; padding: 12px 14px 8px; }
 .modal-body { padding: 0 14px 8px; overflow: auto; overflow-wrap: anywhere; }
 .steps { display: flex; gap: 4px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 12px; flex-wrap: wrap; }
@@ -168,6 +178,12 @@ main { padding: 12px; max-width: 760px; margin: 0 auto; }
 .steps .current .step-num { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
 .steps .done .step-num { border-color: var(--good); color: var(--good); }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.modal-footer .btn-back { margin-right: auto; }
+/* Aides d'une étape : discrètes, en bas, repliées */
+.modal-body .guide { border: 0; background: none; padding: 0; margin-top: 10px; }
+.modal-body .guide summary { font-weight: 400; font-size: 13px; }
+.modal-body .guide + .guide { margin-top: 4px; }
+.modal-body .guide[open] { border-left: 2px solid var(--border); padding-left: 10px; }
 
 /* Icônes : tracés SVG en masque, couleur du texte du bouton */
 .icon { width: 16px; height: 16px; display: inline-block; flex: none; background: currentColor;

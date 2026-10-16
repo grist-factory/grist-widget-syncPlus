@@ -49,9 +49,9 @@ const SECTIONS = [
   { id: 's-options', role: 'source',
     title: ['Ajouter un destinataire', 'Add a recipient'],
     text: [[
-      'Sur la carte de l’export, Ajouter un destinataire. Mode « avec réponse » (recommandé) : Grist pousse chaque modification, même page fermée. Le secret garantit que la réponse vient de quelqu’un qui a reçu l’invitation. Deux autres modes : Échange (dans les deux sens) et Lien public, plus bas.',
+      'Sur la carte de l’export, Ajouter un destinataire. Mode « dans un seul sens » (recommandé) : Grist pousse chaque modification, même page fermée. Le secret garantit que la réponse vient de quelqu’un qui a reçu l’invitation. Deux autres modes : Échange (dans les deux sens) et Lien public, plus bas.',
     ], [
-      'On the export card, Add a recipient. “With reply” mode (recommended): Grist pushes every change, even with the page closed. The secret guarantees the reply comes from someone who received the invitation. Two other modes: Exchange (both ways) and Public link, below.',
+      'On the export card, Add a recipient. “One way” mode (recommended): Grist pushes every change, even with the page closed. The secret guarantees the reply comes from someone who received the invitation. Two other modes: Exchange (both ways) and Public link, below.',
     ]],
     images: ['04-source-options'] },
   { id: 's-invite', role: 'source',

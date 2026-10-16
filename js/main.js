@@ -65,7 +65,7 @@ function showHome() {
     el('span', { class: 'tile-title' }, title), el('span', { class: 'tile-desc' }, desc));
   showScreen(el('h2', { class: 'home-title' }, t('home.title')),
     el('div', { class: 'tiles' }, tile('send', t('home.send'), t('home.send.desc')), tile('receive', t('home.receive'), t('home.receive.desc'))),
-    roleGuide({ open: true }));
+    roleGuide({}));
 }
 
 function openSettings() {

@@ -13,7 +13,7 @@ La SOURCE organise ses envois en **exports** : un export a un nom, des tables et
 colonnes qui partent. On y ajoute ensuite les personnes qui le reçoivent, une à une, et on peut en
 révoquer une seule sans toucher aux autres. Trois modes par personne :
 
-- **avec réponse** (recommandé) : ils échangent deux codes ; Grist pousse chaque modification vers
+- **dans un seul sens** (recommandé) : ils échangent deux codes ; Grist pousse chaque modification vers
   la CIBLE, même quand personne n'a la page ouverte ;
 - **Échange** : la même chose dans les deux sens, chaque document tient l'autre à jour (voir
   [plus bas](#échange-dans-les-deux-sens)) ;
