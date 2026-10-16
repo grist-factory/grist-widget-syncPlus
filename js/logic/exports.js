@@ -3,6 +3,11 @@
 // d'accès) ; ce qu'un Échange renvoie.
 import { COL_ID, DELETE_COL, EXPORT_COL, HEX16, KEY_COL, KIND, ORDER_COL, RECALC_COL, RESEND_COL, SCHEMA_COL, SYNC_TABLE, TABLE_COL, TYPE_COL, is, parseJson } from './common.js';
 
+// Dernier envoi à un destinataire coupé (révoqué, export supprimé, Échange arrêté) : une ligne
+// « fin » de son export, envoyée directement à l'adresse de son webhook. Sans elle, la CIBLE, qui ne
+// lit pas la SOURCE, ne saurait jamais que plus rien n'arrivera.
+export const endNotice = exportId => [{ [EXPORT_COL]: exportId, [TYPE_COL]: KIND.end }];
+
 // Colonnes qu'une table SOURCE peut envoyer : toutes ses colonnes de données et formules, hors
 // colonnes de la synchro et colonnes internes de Grist. Les pièces jointes ne peuvent pas partir
 // (`blocked`). Une Référence part comme le texte qu'elle affiche.

@@ -70,14 +70,16 @@ export function parseLot(text) {
 // ---------------------------------------------------------------------------------------------
 // Dépliage
 
-// Ce que dit une ligne brute : { table, list, text } ou { table, lot }, ou null si elle ne peut pas
-// venir du webhook de cet export (`exportId`) : autre export, type inconnu, table au nom invalide,
-// liste, lot ou colonnes illisibles.
+// Ce que dit une ligne brute : { table, list, text }, { table, lot } ou { end } (la SOURCE a coupé
+// cet envoi, voir endNotice), ou null si elle ne peut pas venir de la SOURCE de cet export
+// (`exportId`) : autre export, type inconnu, table au nom invalide, liste, lot ou colonnes illisibles.
 function readRaw(row, exportId) {
   const table = row[TABLE_COL];
   const cols = isBlank(row[SCHEMA_COL]) ? [] : parseJson(row[SCHEMA_COL]);
   const columnsOk = Array.isArray(cols) && (!cols.length || validColumns(cols));
-  if ((exportId && row[EXPORT_COL] !== exportId) || !isSafeId(table) || !columnsOk) return null;
+  if (exportId && row[EXPORT_COL] !== exportId) return null;
+  if (row[TYPE_COL] === KIND.end && exportId) return { end: true };
+  if (!isSafeId(table) || !columnsOk) return null;
   if (row[TYPE_COL] === KIND.keys) {
     const text = String(row[LIST_COL] || '');
     return !text || parseList(text) ? { table, text } : null;
@@ -103,20 +105,24 @@ function unpackedRows(row, { table, text, lot }) {
 // lignes qu'un lot coupé n'a pas portées depuis le dernier renvoi (`missing`), les clés des lignes
 // trop grosses pour un envoi et celles arrivées (`big`, `arrived`), les tables reçues par un renvoi
 // (`resent`), dont le compte précédent ne vaut plus, et le nombre de lignes rejetées (`rejected`).
-// Au plus `max` lignes reçues par passage, les plus anciennes : les suivantes attendent le passage
-// d'après (`left`).
+// `ended` : { at } (heure d'arrivée) si la dernière nouvelle de la SOURCE est la fin de cet envoi,
+// null si des données sont arrivées après, absent si ce passage n'en dit rien. Au plus `max` lignes
+// reçues par passage, les plus anciennes : les suivantes attendent le passage d'après (`left`).
 export function planUnpack(journalRows, journalTable, { exportId = null, max = Infinity } = {}) {
   const all = journalRows.filter(isRaw).sort((a, b) => a.id - b.id);
   const raw = all.slice(0, max);
   const added = [];
   const gaps = { missing: new Map(), big: new Map(), arrived: new Map(), resent: new Set() };
   let rejected = 0;
+  let ended;
   for (const row of raw) {
     const read = readRaw(row, exportId);
     if (!read) {
       rejected++;
       continue;
     }
+    ended = read.end ? { at: typeof row[RECEIVED_COL] === 'number' ? row[RECEIVED_COL] : null } : null;
+    if (read.end) continue;
     added.push(...unpackedRows(row, read));
     if (read.lot) noteGaps(gaps, read.table, read.lot, !isBlank(row[RESEND_COL]));
   }
@@ -128,6 +134,7 @@ export function planUnpack(journalRows, journalTable, { exportId = null, max = I
   const plain = map => Object.fromEntries(map);
   return {
     actions, missing: plain(gaps.missing), big: plain(gaps.big), arrived: plain(gaps.arrived), resent: [...gaps.resent], rejected, left: all.length - raw.length,
+    ...(ended === undefined ? {} : { ended }),
   };
 }
 

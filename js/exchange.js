@@ -4,8 +4,8 @@
 // la réponse (`from` encore vide) avant de recopier quoi que ce soit.
 import { SYNC_TABLE } from './logic/common.js';
 import { deleteColumnAction, keyTriggerAction, missingSyncColumns, prepareSourceActions } from './logic/formulas.js';
-import { exchangeTables, exportCondition, exportTables, exportableColumns, hookName, hooksOf } from './logic/exports.js';
-import { apply, createWebhook, deleteWebhook, listWebhooks, readSchema, webhookConditions } from './grist.js';
+import { endNotice, exchangeTables, exportCondition, exportTables, exportableColumns, hookName, hooksOf } from './logic/exports.js';
+import { apply, createWebhook, deleteWebhook, deleteWebhookWithNotice, listWebhooks, readSchema, webhookConditions } from './grist.js';
 import { removeTechnicalTables } from './pages.js';
 import { removeExport, saveExport, syncRows, updateSourceNote } from './source/synchro.js';
 import { receivedJournals } from './target/journals.js';
@@ -47,7 +47,7 @@ export async function addDeleteColumns(tables) {
 // (export de retour) il disparaît aussi.
 export async function endExchange(exportId, { keepExport }) {
   const [hooks, conditions] = await Promise.all([listWebhooks(), webhookConditions()]);
-  for (const h of hooksOf(hooks, conditions, exportId)) await deleteWebhook(h.id);
+  for (const h of hooksOf(hooks, conditions, exportId)) await deleteWebhookWithNotice(h, endNotice(exportId));
   const journals = receivedJournals(await readSchema()).filter(r => r.note.export === exportId && r.note.mode === 'echange');
   await removeTechnicalTables(journals.map(r => r.journal));
   if (keepExport) await saveExport(exportId, exportTables(await syncRows(), exportId));

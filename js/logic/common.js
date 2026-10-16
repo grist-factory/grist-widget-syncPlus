@@ -33,7 +33,7 @@ export const TRACK_COL = STATE_COL;
 // clés, le filtre de lignes et la ligne d'un export en Échange restent dans la SOURCE ; 'complet' et
 // son empreinte ne sont lus que par le lien public. Une seule ligne 'charge', d'aucun export, suit
 // les renvois du document (voir resend.js).
-export const KIND = { keys: 'cles', lot: 'lot', full: 'complet', mark: 'empreinte', filter: 'filtre', track: 'suivi', swap: 'echange', load: 'charge' };
+export const KIND = { keys: 'cles', lot: 'lot', full: 'complet', mark: 'empreinte', filter: 'filtre', track: 'suivi', swap: 'echange', load: 'charge', end: 'fin' };
 
 // CIBLE : un journal par export reçu, où le webhook dépose les lignes de Synchro.
 export const JOURNAL_PREFIX = 'Journal_';

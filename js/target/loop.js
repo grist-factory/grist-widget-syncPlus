@@ -106,8 +106,9 @@ function nextSuspect(was = {}, rejected, flood) {
   return { n: (was.n || 0) + rejected, at, ...(flood ? { flood: at } : was.flood ? { flood: was.flood } : {}) };
 }
 
-// Déplie ce qui est arrivé, et note dans le journal ce qui manque encore et les arrivées
-// suspectes (lignes rejetées, flot anormal). Rend la note à jour, les lignes du journal, et s'il
+// Déplie ce qui est arrivé, et note dans le journal ce qui manque encore, les arrivées suspectes
+// (lignes rejetées, flot anormal) et la fin de l'envoi annoncée par la SOURCE (`ended`, heure ;
+// effacée si des données arrivent ensuite). Rend la note à jour, les lignes du journal, et s'il
 // reste des lignes reçues pour le passage suivant.
 async function unpack(journal, note) {
   let rows = await fetchRows(journal);
@@ -118,9 +119,10 @@ async function unpack(journal, note) {
   await apply(plan.actions);
   const gaps = nextGaps(note, plan);
   if (plan.rejected || flood) gaps.suspect = nextSuspect(note.suspect, plan.rejected, flood);
-  if (gaps.suspect || JSON.stringify(gaps) !== JSON.stringify({ missing: note.missing || {}, big: note.big || {} })) {
-    note = { ...note, ...gaps };
-    await updateJournalNote(journal, n => ({ ...n, ...gaps }));
+  const ended = (plan.ended === undefined ? note.ended : plan.ended && (plan.ended.at || Math.floor(Date.now() / 1000))) || undefined;
+  if (gaps.suspect || ended !== note.ended || JSON.stringify(gaps) !== JSON.stringify({ missing: note.missing || {}, big: note.big || {} })) {
+    note = { ...note, ...gaps, ended };
+    await updateJournalNote(journal, n => ({ ...n, ...gaps, ended }));
   }
   rows = await fetchRows(journal);
   return { note, rows, left: plan.left };
@@ -247,8 +249,8 @@ const summary = s => (s.added || s.updated || s.removed ? t('recv.result', s) : 
 
 // Résultat d'un passage noté pour l'onglet ; rend vrai si la carte change.
 function notePass(journal, pass, before, offersBefore, at) {
-  // Ce que la carte montre du journal : lignes manquantes, trop grosses, arrivées suspectes.
-  const gaps = JSON.stringify([pass.note.missing, pass.note.big, pass.note.suspect]);
+  // Ce que la carte montre du journal : lignes manquantes, trop grosses, arrivées suspectes, fin.
+  const gaps = JSON.stringify([pass.note.missing, pass.note.big, pass.note.suspect, pass.note.ended]);
   state.results.set(journal, { at, rows: pass.rows, gaps });
   let changed = !before || Boolean(before.error) || !before.rows !== !pass.rows || before.gaps !== gaps || offersBefore !== JSON.stringify(state.offers.get(journal) || []);
   for (const tb of pass.tables) {

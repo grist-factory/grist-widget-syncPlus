@@ -142,4 +142,12 @@ export async function webhookConditions() {
 export const setWebhookEnabled = (id, enabled) => rest('PATCH', `/webhooks/${encodeURIComponent(id)}`, { enabled });
 export const renameWebhook = (id, name) => rest('PATCH', `/webhooks/${encodeURIComponent(id)}`, { name });
 export const deleteWebhook = id => rest('DELETE', `/webhooks/${encodeURIComponent(id)}`);
+
+// Webhook effacé après un dernier envoi direct à son adresse (`rows`, comme le webhook les
+// enverrait). Un lien déjà mort ou trop lent ne retient pas l'effacement.
+export async function deleteWebhookWithNotice(h, rows) {
+  const body = JSON.stringify(rows);
+  await gristFetch(h.fields.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) }).catch(() => {});
+  await deleteWebhook(h.id);
+}
 export const clearWebhookQueue = () => rest('DELETE', '/webhooks/queue');

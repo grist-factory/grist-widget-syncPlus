@@ -144,6 +144,10 @@ la seule personne concernée.
   le lien. Aucun nom reçu ne peut viser une propriété des objets JavaScript (`__proto__`…), et les
   volumes sont bornés (100 000 lignes par lot, 1 000 clés trop grosses et 200 tables suivies par
   journal, 500 lignes reçues par passage).
+- **Fin d'un envoi** : quand la SOURCE révoque un destinataire, supprime l'export ou arrête un
+  Échange, son widget envoie d'abord une ligne « fin » à l'adresse du webhook, puis l'efface ; la
+  carte de la CIBLE affiche « Coupé par la SOURCE ». Qui a la clé peut forger cette ligne : la
+  carte le dirait à tort, jusqu'aux données suivantes, qui effacent l'avis. Rien n'est supprimé.
 - **Rattachement** : si la CIBLE a choisi une colonne commune pour une table existante, une ligne
   locale sans clé dont la valeur est égale à celle d'une ligne reçue est rattachée à celle-ci
   (puis tenue à jour par la SOURCE).

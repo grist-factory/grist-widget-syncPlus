@@ -264,6 +264,8 @@
   "recv.status.ok": "Up to date",
   "recv.status.error": "Error",
   "recv.status.incomplete": "Incomplete",
+  "recv.status.ended": "Cut by the SOURCE",
+  "recv.ended": "The SOURCE cut this feed on {at} (revoked, export deleted or Exchange stopped): nothing more will arrive. Tables keep their rows; “Stop receiving” removes the journal and its form.",
   "recv.sync.none": "Nothing new: everything is up to date.",
   "recv.consent": "If you continue, the widget creates in this document the new destination tables (or adds their columns and a hidden id_sync key to existing tables), a technical journal for this export, and its receiving form, on its own page.",
   "recv.consent.public": "If you continue, the widget creates in this document the new destination tables (or adds their columns and a hidden id_sync key to existing tables) and a technical journal without a page for this export.",

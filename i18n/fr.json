@@ -264,6 +264,8 @@
   "recv.status.ok": "À jour",
   "recv.status.error": "Erreur",
   "recv.status.incomplete": "Incomplet",
+  "recv.status.ended": "Coupé par la SOURCE",
+  "recv.ended": "La SOURCE a coupé cet envoi le {at} (révocation, export supprimé ou Échange arrêté) : plus rien n’arrivera. Les tables gardent leurs lignes ; « Arrêter la réception » retire le journal et son formulaire.",
   "recv.sync.none": "Rien de nouveau : tout est à jour.",
   "recv.consent": "En continuant, le widget crée dans ce document les tables de destination nouvelles (ou ajoute aux tables existantes leurs colonnes et une clé id_sync masquée), un journal technique pour cet export, et son formulaire de réception, sur sa propre page.",
   "recv.consent.public": "En continuant, le widget crée dans ce document les tables de destination nouvelles (ou ajoute aux tables existantes leurs colonnes et une clé id_sync masquée) et un journal technique sans page pour cet export.",

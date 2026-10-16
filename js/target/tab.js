@@ -90,6 +90,7 @@ async function openPending(groups) {
 function cardStatus(group) {
   const { journal, note } = group;
   if (group.waiting) return ['waiting', 'pending'];
+  if (note.ended) return ['ended', 'off'];
   if ((state.results.get(journal) || {}).error || note.tables.some(tb => (state.results.get(tableKey(journal, tb.table)) || {}).error)) return ['error', 'err'];
   return Object.keys({ ...note.missing, ...note.big }).length ? ['incomplete', 'pending'] : ['ok', 'ok'];
 }
@@ -103,11 +104,12 @@ function tableLine(group, entry) {
   return el('p', { class: `small ${result && result.error ? 'text-danger' : 'muted'}` }, `${entry.table} → ${entry.dest}${detail}`);
 }
 
-// Avis d'une réception : lignes manquantes, trop grosses, instantané trop gros, lien partagé,
-// arrivées suspectes, tables proposées ou refusées.
+// Avis d'une réception : envoi coupé par la SOURCE, lignes manquantes, trop grosses, instantané
+// trop gros, lien partagé, arrivées suspectes, tables proposées ou refusées.
 function cardNotes(group) {
   const { note } = group;
   return [
+    note.ended ? message('warn', t('recv.ended', { at: dateText(note.ended * 1000) })) : null,
     Object.entries(note.missing || {}).map(([table, n]) => message('warn', t('recv.missing', { table, n }))),
     Object.entries(note.big || {}).map(([table, keys]) => message('warn', t('recv.big', { table, n: keys.length }))),
     (note.tooBig || []).length ? message('warn', t('recv.tooBig', { tables: note.tooBig.join(', ') })) : null,
