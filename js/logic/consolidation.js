@@ -71,6 +71,17 @@ export function newColumnsMap({ columns = [], map = {} }, sent, destColIds) {
   return next;
 }
 
+// Colonnes que la SOURCE a ajoutées à l'export, gardées pour l'historique (nom d'ici, heure ; les
+// ADDED_KEPT dernières) : celles que newColumnsMap vient de ranger (`map`). Une entrée qui ne
+// connaissait encore aucune colonne (ancien montage) n'en note pas : tout y paraîtrait nouveau.
+const ADDED_KEPT = 10;
+export function addedColumns({ columns = [], map = {}, addedCols = [] }, next, at) {
+  const known = new Set([...columns.map(c => c.id), ...Object.keys(map)]);
+  const fresh = Object.keys(next).filter(id => !known.has(id));
+  if (!known.size || !fresh.length) return addedCols.length ? addedCols : undefined;
+  return [...addedCols, ...fresh.map(id => ({ col: next[id], at }))].slice(-ADDED_KEPT);
+}
+
 // Valeur reçue et valeur de la destination égales ? Vide vaut vide ; une liste de choix lue dans
 // Grist commence par la marque 'L'.
 function sameValue(sent, have) {

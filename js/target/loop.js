@@ -1,11 +1,12 @@
-// CIBLE : la recopie, tant qu'un éditeur a la page du widget ouverte. Toutes les 10 secondes (la
-// minute quand rien n'est arrivé depuis une minute), chaque journal est déplié, recopié dans ses
+// CIBLE : la recopie, tant qu'un éditeur a la page du widget ouverte. Toutes les 10 secondes, le
+// widget demande à Grist quelles tables ont changé (voir due) ; si un journal ou une destination a
+// changé, et au moins une fois par minute, chaque journal est déplié, recopié dans ses
 // destinations, puis nettoyé. Le résultat de chaque passage est gardé ici pour l'onglet.
 import { EXPORT_COL, KEY_COL, KIND, LIST_COL, RESEND_COL, SYNC_TABLE, TABLE_COL, TYPE_COL, randomHex } from '../logic/common.js';
 import { exchangeColumns, exportTables } from '../logic/exports.js';
-import { awaitingPartner, expandRows, isRaw, nextGaps, planPull, planPurge, planUnpack, recentChanges, rowsByTable, sentColumns } from '../logic/journal.js';
-import { copyColumns, destRefs, droppedColumns, followRenames, manualEdits, newColumnsMap, planConsolidation, restoreActions, rowNumbers } from '../logic/consolidation.js';
-import { apply, docIdentity, fetchRows, gristFetch, readSchema, withLock } from '../grist.js';
+import { awaitingPartner, expandRows, isRaw, nextGaps, planPull, planPurge, planUnpack, recentChanges, rowsByTable, sentColumns, touchedTables } from '../logic/journal.js';
+import { addedColumns, copyColumns, destRefs, droppedColumns, followRenames, manualEdits, newColumnsMap, planConsolidation, restoreActions, rowNumbers } from '../logic/consolidation.js';
+import { apply, docChanges, docIdentity, fetchRows, gristFetch, readSchema, withLock } from '../grist.js';
 import { addDestColumnsActions, destColumns, receivedJournals, updateJournalNote, upgradeJournal } from './journals.js';
 import { syncRows } from '../source/synchro.js';
 import { wireExchange } from '../exchange.js';
@@ -20,7 +21,8 @@ const IDLE_MS = 60000;
 const RAW_BATCH = 500;
 const FLOOD_PER_MIN = 600;
 // Une destination dont le journal n'a pas changé n'est relue, pour y voir les retouches faites à la
-// main, qu'au plus toutes les 5 minutes (et au retour sur la page, ou sur « Synchroniser »).
+// main, que si Grist dit qu'elle a changé (voir due), au retour sur la page, sur « Synchroniser »,
+// et au plus tard au bout de 5 minutes.
 const REREAD_MS = 300000;
 const DRIFT_KEPT = 20;
 
@@ -40,6 +42,11 @@ export const isAccessError = e => /access|denied|blocked|permission/i.test(e.mes
 
 let busy = false;
 let lastArrival = Date.now(); // dernière arrivée dans un journal (ou retour sur la page)
+let lastPass = 0; // début du dernier passage
+// Coup d'œil sur le document (voir due) : son état au coup d'œil précédent (`hash`), les journaux
+// et destinations du dernier passage (`tables`), un journal en lien public (`pull`) ; `compare`
+// passe à faux si Grist refuse.
+const watch = { hash: '', tables: new Set(), pull: false, compare: true };
 let onChange = async () => {}; // l'onglet, redessiné quand un passage a changé quelque chose
 const inflow = new Map(); // journal -> { ids, at } : lignes reçues vues au passage précédent
 const settled = new Map(); // `journal|table` -> { signature, at } : journal déjà recopié sans effet
@@ -49,8 +56,8 @@ const pulled = new Map(); // journal -> empreintes des instantanés publics déj
 export function startAutoConsolidation(render) {
   onChange = render;
   const tick = async () => {
-    if (document.visibilityState === 'visible') await consolidateAll();
-    setTimeout(tick, Date.now() - lastArrival > IDLE_MS ? IDLE_MS : POLL_MS);
+    if (document.visibilityState === 'visible' && await due()) await consolidateAll();
+    setTimeout(tick, POLL_MS);
   };
   setTimeout(tick, POLL_MS);
   document.addEventListener('visibilitychange', () => {
@@ -58,6 +65,30 @@ export function startAutoConsolidation(render) {
     lastArrival = Date.now();
     consolidateAll({ reread: true });
   });
+}
+
+// Un passage est-il dû ? Grist dit quelles tables ont changé depuis le coup d'œil précédent
+// (docChanges) : un journal où des lignes sont arrivées, une destination retouchée à la main (elle
+// est alors relue), ou le schéma. Sinon un passage par minute suffit (retouche que la comparaison
+// n'aurait pas dite). Un lien public, que rien ne signale ici, et le cas où Grist refuse la
+// comparaison (droits) gardent le rythme d'avant : toutes les POLL_MS tant que des lignes
+// arrivent, puis toutes les minutes.
+async function due() {
+  if (busy) return false; // un passage en cours : le coup d'œil attend le suivant
+  const elapsed = Date.now() - lastPass;
+  const steady = elapsed >= (Date.now() - lastArrival > IDLE_MS ? IDLE_MS : POLL_MS);
+  if (watch.compare) {
+    const changes = await docChanges(watch.hash).catch(() => ({ hash: watch.hash, tables: null }));
+    if (changes) {
+      const touched = changes.hash === watch.hash ? [] : touchedTables(changes.tables, watch.tables);
+      watch.hash = changes.hash;
+      if (touched === null) settled.clear();
+      else for (const [key, was] of settled) if (touched.includes(was.dest)) settled.delete(key);
+      return elapsed >= IDLE_MS || touched === null || touched.length > 0 || (watch.pull && steady);
+    }
+    watch.compare = false;
+  }
+  return steady;
 }
 
 // Date de la visite précédente, retenue par navigateur et par document : la seule chose que le
@@ -153,7 +184,8 @@ function offersOf(groups, note) {
 // Colonnes reçues pour une table, et la correspondance. Échange, côté du document qui a invité
 // (`allowed` : colonnes que son export envoie pour cette destination) : l'autre document n'écrit
 // que celles-là (voir exchangeColumns). Une colonne ajoutée à l'export après coup ne remplace
-// jamais une colonne de la destination qui porte déjà son nom (elle prend un nom libre).
+// jamais une colonne de la destination qui porte déjà son nom (elle prend un nom libre) ; elle
+// est notée pour l'historique (`addedCols`).
 function receivedColumns(entry, tableRows, schema, allowed) {
   let sent = sentColumns(tableRows, entry.columns || []);
   let next = entry;
@@ -163,7 +195,7 @@ function receivedColumns(entry, tableRows, schema, allowed) {
     next = { ...entry, map: kept.map };
   }
   const map = newColumnsMap(next, destColumns(sent), schema.columns(next.dest).map(c => c.colId));
-  return { sent, entry: map ? { ...next, map } : next };
+  return { sent, entry: map ? { ...next, map, addedCols: addedColumns(next, map, Math.floor(Date.now() / 1000)) } : next };
 }
 
 // Recopie d'une table dans sa destination (une colonne nouvelle y est d'abord ajoutée ; une colonne
@@ -204,7 +236,7 @@ async function copyTable(ctx, noted) {
   const written = stats.added + stats.updated + stats.removed > 0;
   await apply(swap && written ? [['UpdateRecord', SYNC_TABLE, swap.id, { [RESEND_COL]: randomHex(4) }], ...actions] : actions);
   if (actions.length) settled.delete(key);
-  else settled.set(key, { signature, at: Date.now() });
+  else settled.set(key, { signature, at: Date.now(), dest: entry.dest });
   const after = written ? await fetchRows(entry.dest) : destRows;
   lastRead.set(key, { numbers: rowNumbers(after), drift: manualEdits({ journalRows: tableRows, destRows: after, copyCols, exchange, except: gone }) });
   return { entry, stats, copyCols, types, dropped, ...lastRead.get(key) };
@@ -227,7 +259,7 @@ async function copyContext(schema, journal, note, groups) {
 // CIBLE : l'export de retour suit.
 async function saveEntries(journal, note, updates) {
   if (!updates.size) return;
-  const noted = ({ dest, map, match, refs, dropped }) => JSON.parse(JSON.stringify({ dest, map, match, refs, dropped }));
+  const noted = ({ dest, map, match, refs, dropped, addedCols }) => JSON.parse(JSON.stringify({ dest, map, match, refs, dropped, addedCols }));
   const tables = note.tables.map(tb => (updates.has(tb.table) ? { ...tb, dropped: undefined, ...noted(updates.get(tb.table)) } : tb));
   await updateJournalNote(journal, n => ({ ...n, tables }));
   if (note.mode === 'echange' && !note.retour) await wireExchange({ ...note, tables });
@@ -241,13 +273,14 @@ const driftResult = (drift, labelCol, droppedCols) => ({
   driftGone: drift.filter(d => d.gone).length,
 });
 
-// Ce que la carte montre d'une table : compteurs, colonne qui nomme les lignes, historique,
-// valeurs retouchées à la main (`drift`).
+// Ce que la carte montre d'une table : compteurs, colonne qui nomme les lignes, historique (dont
+// les colonnes ajoutées par la SOURCE, `added`), valeurs retouchées à la main (`drift`).
 function tableResult({ entry, stats, copyCols, types, numbers, drift, dropped, error }, groups) {
   if (error) return { table: entry.table, error };
   const labelCol = copyCols.some(([from]) => from === entry.label) ? entry.label : (copyCols[0] || [])[0];
   const recent = recentChanges(groups.get(entry.table) || [], labelCol, state.lastVisit, Infinity, { copyCols, numbers });
-  return { table: entry.table, stats, dest: entry.dest, copyCols, labelCol, labelCols: copyCols.map(([c]) => c), types, recent, ...driftResult(drift, labelCol, dropped) };
+  const added = (entry.addedCols || []).filter(a => a.at > (state.lastVisit || 0));
+  return { table: entry.table, stats, dest: entry.dest, copyCols, labelCol, labelCols: copyCols.map(([c]) => c), types, recent, added, ...driftResult(drift, labelCol, dropped) };
 }
 
 // « Corriger » : une table reçue reprend l'état exact de la SOURCE (la dernière version reçue de
@@ -320,10 +353,13 @@ function notePass(journal, pass, before, offersBefore, at) {
 
 async function passAll() {
   let changed = false;
+  lastPass = Date.now();
   let schema = await readSchema();
   let upgraded = false;
   for (const { journal } of receivedJournals(schema)) upgraded = (await upgradeJournal(schema, journal)) || upgraded;
   if (upgraded) schema = await readSchema();
+  watch.tables = new Set(receivedJournals(schema).flatMap(r => [r.journal, ...r.note.tables.map(tb => tb.dest)]));
+  watch.pull = receivedJournals(schema).some(r => r.note.mode === 'public');
   for (const received of receivedJournals(schema).filter(r => !awaitingPartner(r.note))) {
     const { journal } = received;
     const before = state.results.get(journal);

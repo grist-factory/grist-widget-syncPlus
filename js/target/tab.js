@@ -264,14 +264,16 @@ async function correct(group, entry, { driftCount, driftGone = 0, droppedCols = 
 
 // ---------------------------------------------------------------------------------------------
 // Historique : lignes changées depuis la visite précédente, par table de destination : compteurs
-// par état (ajoutées, modifiées, supprimées), puis les plus récentes (HISTORY_MAX par table),
+// par état (ajoutées, modifiées, supprimées, et colonnes ajoutées par la SOURCE), puis les plus
+// récentes (HISTORY_MAX par table),
 // numérotées comme dans la table et nommées par la colonne choisie pour chaque table. Chacune
 // s'ouvre au clic sur son avant et son après. Tout est replié par défaut.
 
-const STATE_ICON = { ajout: 'plus', modif: 'edit', suppression: 'minus' };
+const STATE_ICON = { ajout: 'plus', modif: 'edit', suppression: 'minus', colonne: 'column' };
+const COUNTED = [...STATES, 'colonne'];
 
 function stateCounts(items) {
-  return el('span', { class: 'history-counts' }, STATES.map((st) => {
+  return el('span', { class: 'history-counts' }, COUNTED.map((st) => {
     const n = items.filter(c => c.state === st).length;
     return n ? el('span', { class: `chg chg-${st}` }, icon(STATE_ICON[st]), t(`recv.history.n.${st}`, { n })) : null;
   }));
@@ -289,7 +291,7 @@ function historyRow(c, types, id) {
   const line = [
     el('span', { class: 'chg-n', title: c.n ? t(gone ? 'recv.history.rowGone' : 'recv.history.row', { n: c.n }) : null }, c.n ? String(c.n) : ''),
     el('span', { class: 'chg-dot', title: t(`recv.history.${c.state}`) }, icon(STATE_ICON[c.state])),
-    el('span', { class: 'chg-label' }, c.label || '—'),
+    el('span', { class: 'chg-label' }, c.state === 'colonne' ? t('recv.history.colLabel', { col: c.label }) : c.label || '—'),
     el('span', { class: 'chg-state' }, t(`recv.history.${c.state}`)),
     el('time', { class: 'chg-time', datetime: new Date(c.at * 1000).toISOString() }, when(c.at))];
   const rowClass = `chg-row chg-${c.state}`;
@@ -310,7 +312,10 @@ const historyTable = ({ id, dest, items, types }) => (items.length ? el('section
 function history(group) {
   const tables = group.note.tables.map((tb) => {
     const result = state.results.get(tableKey(group.journal, tb.table)) || {};
-    return { id: tableKey(group.journal, tb.table), dest: tb.dest, items: result.recent || [], types: result.types || {} };
+    // Une colonne ajoutée par la SOURCE prend place parmi les lignes, à son heure.
+    const columns = (result.added || []).map(a => ({ at: a.at, key: `col:${a.col}`, state: 'colonne', label: a.col, n: null, detail: null }));
+    const items = [...columns, ...(result.recent || [])].sort((x, y) => y.at - x.at);
+    return { id: tableKey(group.journal, tb.table), dest: tb.dest, items, types: result.types || {} };
   });
   const all = tables.flatMap(tb => tb.items);
   if (!all.length) return el('p', { class: 'muted small' }, t('recv.history.none'));

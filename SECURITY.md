@@ -49,6 +49,7 @@ ailleurs).
 | `GET <instance>/grist-plugin-api.js` | au démarrage | aucune |
 | `GET/POST/PATCH/DELETE <document>/webhooks…` | onglet Envoyer et Échange : lister, créer, renommer, suspendre, supprimer un webhook, vider la file ; page ouverte par un propriétaire, toutes les 10 s (60 s onglet caché) : état des envois | jeton court du document (`getAccessToken`) en paramètre `auth=` ; Grist réserve ces appels aux propriétaires |
 | `GET <document>/sql?q=select …` | lectures légères répétées (colonnes de `Synchro`, ligne de test d'un journal) | jeton court en lecture seule |
+| `GET <document>/compare?left=<état>&right=HEAD&maxRows=1` | onglet Recevoir, toutes les 10 s page ouverte : quelles tables ont changé depuis le coup d'œil précédent (seuls leurs noms servent ; Grist renvoie aussi au plus une valeur par colonne changée, que le widget ignore) | jeton court en lecture seule ; Grist le réserve à qui peut lire tout le document, sinon le widget relit comme avant |
 | `POST <instance>/api/s/<clé>/tables/<journal>/records?flat=1` | bouton « Tester le lien » : une ligne marquée d'un nombre au hasard | aucune (clé du formulaire) |
 | `GET <document SOURCE>` | onglet Envoyer : le document est-il lisible par lien public ? | aucune (requête anonyme) |
 | `GET <document SOURCE>/tables/Synchro/records?filter=…` | CIBLE en mode lien public, page ouverte : les lignes `empreinte`, puis `complet` si elles ont changé | aucune (requête anonyme) |

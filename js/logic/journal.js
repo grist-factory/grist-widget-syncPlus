@@ -284,6 +284,13 @@ export function planPurge(journalRows, journalTable, { keep = [], drop = [] } = 
 // numéro dans la destination (`numbers`, voir rowNumbers), celui qu'elle avait pour une ligne
 // supprimée ; `detail` montre avant et après sur les colonnes recopiées (`copyCols`).
 export const STATES = ['ajout', 'modif', 'suppression'];
+
+// Tables à relire parmi celles que Grist dit changées (`changed` ; null : on ne sait pas) : les
+// journaux et destinations suivis (`watched`), et le schéma (une table ou une colonne ajoutée,
+// effacée). Null : tout relire.
+const SCHEMA_TABLES = ['_grist_Tables', '_grist_Tables_column'];
+export const touchedTables = (changed, watched) => (changed === null ? null
+  : [...changed].filter(table => watched.has(table) || SCHEMA_TABLES.includes(table)));
 export function recentChanges(journalRows, labelCol, since, max, { copyCols = [], numbers = new Map() } = {}) {
   return [...latestByKey(journalRows).values()]
     .map(v => ({ at: v.row[RECEIVED_COL] ?? v.order, state: v.row[STATE_COL], row: v.row }))

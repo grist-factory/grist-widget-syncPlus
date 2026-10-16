@@ -197,8 +197,9 @@ la SOURCE n'a pas changée garde ses retouches.
 
 Chaque ajout, modification ou suppression dans la SOURCE arrive dans le journal en une seconde
 environ, même si personne n'a le widget ouvert. La **recopie** dans les tables de destination se
-fait quand un éditeur ouvre la page du widget (même replié), puis toutes les 10 secondes tant
-qu'elle reste ouverte.
+fait quand un éditeur ouvre la page du widget (même replié), puis tant qu'elle reste ouverte :
+toutes les 10 secondes, le widget demande à Grist quelles tables ont changé, et ne relit que
+celles qui ont bougé.
 
 ![Synchro à jour et historique](images/14-cible-historique.png)
 
@@ -206,14 +207,16 @@ La carte montre le propriétaire des données, chaque table reçue avec sa desti
 passage, et l'historique, replié : depuis votre dernière visite, par table, le nombre de lignes
 ajoutées, modifiées et supprimées, puis les lignes elles-mêmes (20 au plus par table), avec leur
 numéro de ligne dans votre table et nommées par la colonne de votre choix. Chaque ligne s'ouvre au
-clic sur ses valeurs avant et après, en petit tableau. Ce que vous ouvrez le reste.
+clic sur ses valeurs avant et après, en petit tableau. Ce que vous ouvrez le reste. Une colonne
+que la SOURCE ajoute à l'export y est annoncée (« Colonne … ajoutée par la SOURCE ») : toutes les
+lignes reçoivent alors sa valeur.
 
 Une retouche faite à la main dans la CIBLE reste en place jusqu'à la prochaine modification de la
 même ligne dans la SOURCE, qui reprend alors toutes ses valeurs. En attendant, la carte la signale
 (« modifications faites à la main ici ») avec, pour chaque cellule, le numéro de ligne, la valeur
 d'ici et celle de la SOURCE. Une ligne reçue supprimée ici, ou une colonne reçue supprimée ici, est
-signalée de même : la colonne n'est pas recréée en douce. L'alerte se met à jour à chaque recopie,
-au plus tard toutes les 5 minutes, ou tout de suite avec **Synchroniser**. **Corriger**, sous
+signalée de même : la colonne n'est pas recréée en douce. L'alerte apparaît une dizaine de
+secondes après la retouche, page du widget ouverte (sinon dès son ouverture). **Corriger**, sous
 l'alerte, remet après confirmation l'état exact de la SOURCE : valeurs, lignes (en fin de table) et
 colonnes. Une table ou une colonne de destination peut être
 renommée : la recopie suit. **Arrêter la réception** efface le journal, son formulaire et sa page,

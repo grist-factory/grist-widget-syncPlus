@@ -77,6 +77,29 @@ export async function selectRows(tableId, colIds) {
   }
 }
 
+// Ce qui a changé dans le document depuis l'état `since` (empreinte d'une action de son
+// historique) : l'état actuel (`hash`) et les tables touchées, lignes ou colonnes (`tables` ; null
+// si `since` est vide ou sorti de l'historique, si une table a été renommée, ou si Grist n'a pas
+// pu répondre). Lu par la comparaison de deux états de Grist (GET /compare, quelques
+// millisecondes ; une valeur au plus par colonne revient). Null si Grist refuse : la comparaison
+// est réservée à qui peut lire tout le document.
+export async function docChanges(since) {
+  const { token, baseUrl } = await grist.docApi.getAccessToken({ readOnly: true });
+  const read = left => gristFetch(`${baseUrl}/compare?left=${encodeURIComponent(left)}&right=HEAD&maxRows=1&auth=${encodeURIComponent(token)}`);
+  try {
+    let response = await read(since || 'HEAD');
+    if ([401, 403].includes(response.status)) return null;
+    if (!response.ok && since) response = await read('HEAD');
+    if (!response.ok) return response.status === 404 ? null : { hash: since, tables: null };
+    const { right, details } = await response.json();
+    const delta = (details || {}).rightChanges;
+    const known = since && delta && !(delta.tableRenames || []).length;
+    return { hash: right.h, tables: known ? new Set(Object.keys(delta.tableDeltas || {})) : null };
+  } catch (e) {
+    return { hash: since, tables: null };
+  }
+}
+
 // Une seule exécution à la fois de `fn` sous ce nom, tous onglets du navigateur confondus.
 export const withLock = (name, fn) => (navigator.locks ? navigator.locks.request(name, fn) : fn());
 
