@@ -293,7 +293,7 @@ export function recentChanges(journalRows, labelCol, since, max, { copyCols = []
       const was = parseJson(c.row[BEFORE_COL]) || {};
       const gone = c.state === 'suppression';
       const n = gone ? (Number.isInteger(was.n) && was.n > 0 ? was.n : null) : numbers.get(c.row[KEY_COL]) || null;
-      return { at: c.at, label: labelCol ? String(c.row[labelCol] ?? '') : '', state: c.state, n, detail: changeDetail(c.state, c.row, copyCols, was) };
+      return { at: c.at, key: c.row[KEY_COL], label: labelCol ? String(c.row[labelCol] ?? '') : '', state: c.state, n, detail: changeDetail(c.state, c.row, copyCols, was) };
     });
 }
 

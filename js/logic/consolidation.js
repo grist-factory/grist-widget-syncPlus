@@ -37,6 +37,17 @@ export function followRenames(entry, schema) {
   return next;
 }
 
+// Colonnes reçues effacées à la main dans la destination (noms d'ici) : leur numéro Grist, noté
+// au passage précédent (`refs`), n'existe plus, ou elles étaient déjà notées (`dropped`). Elles ne
+// sont pas recréées vides à chaque passage, mais signalées ; une colonne de ce nom revenue, ou que
+// la SOURCE n'envoie plus, sort de la liste. La clé `id_sync` n'en fait jamais partie.
+export function droppedColumns(entry, sent, destColIds) {
+  const have = new Set(destColIds);
+  const noted = new Set([...Object.keys((entry.refs || {}).cols || {}), ...(entry.dropped || [])]);
+  return sent.filter(c => ![KEY_COL, ORDER_COL, DELETE_COL].includes(c.id))
+    .map(c => [c.id, (entry.map || {})[c.id] || c.id]).filter(([, to]) => !have.has(to) && noted.has(to));
+}
+
 // Numéros Grist de la destination et de ses colonnes, notés pour suivre un renommage.
 export function destRefs(schema, dest) {
   const table = schema.table(dest);
@@ -85,12 +96,18 @@ function noteReplaced(plan, copyCols, version, destRow) {
   if (cells.length) plan.before.set(version.id, { v: Object.fromEntries(cells.map(([from, to]) => [from, destRow[to] ?? null])) });
 }
 
-// Valeurs retouchées à la main dans la destination : cellules d'une ligne reçue qui diffèrent de
-// la dernière version reçue, lues après la recopie. Rend [{ id, key, n, row, cells: [[colonne du
+// Effet noté sur la dernière version d'une clé partie de la SOURCE alors que la destination ne
+// l'avait plus (ou pas encore) : ni l'historique ni les retouches ne la montrent.
+const LEFT = 'partie';
+const SETTLED_GONE = new Set(['suppression', LEFT]);
+
+// Retouches faites à la main dans la destination, lues après la recopie : cellules d'une ligne
+// reçue qui diffèrent de la dernière version reçue, et lignes reçues effacées ici alors qu'elles
+// sont toujours dans la SOURCE (`gone`). `except` : clés parties de la SOURCE à ce passage. Rend [{ id, key, n, row, cells: [[colonne du
 // journal, colonne d'ici, valeur d'ici, valeur de la SOURCE]] }] par numéro de ligne (`id` : la
 // ligne d'ici, `row` : la version reçue). Échange : rien (une retouche y part vers l'autre
 // document, ce n'est pas un écart).
-export function manualEdits({ journalRows, destRows, copyCols, exchange = false }) {
+export function manualEdits({ journalRows, destRows, copyCols, exchange = false, except = new Set() }) {
   if (exchange) return [];
   const latest = latestByKey(journalRows);
   const numbers = rowNumbers(destRows);
@@ -102,15 +119,26 @@ export function manualEdits({ journalRows, destRows, copyCols, exchange = false 
       .map(([from, to]) => [from, to, row[to] ?? null, version.row[from] ?? null]);
     if (cells.length) edits.push({ id: row.id, key: row[KEY_COL], n: numbers.get(row[KEY_COL]) || null, row: version.row, cells });
   }
-  return edits.sort((a, b) => (a.n || 0) - (b.n || 0));
+  for (const [key, version] of latest) {
+    if (numbers.has(key) || except.has(key) || isTrue(version.row[DELETE_COL]) || SETTLED_GONE.has(version.row[STATE_COL])) continue;
+    edits.push({ id: null, key, n: null, row: version.row, cells: [], gone: true });
+  }
+  return edits.sort((a, b) => Number(Boolean(a.gone)) - Number(Boolean(b.gone)) || (a.n || 0) - (b.n || 0));
 }
 
 // « Corriger » : remet dans les cellules retouchées (voir manualEdits) la valeur de la SOURCE, une
-// écriture par groupe de lignes retouchées sur les mêmes colonnes.
-export function restoreActions(edits, destTable) {
-  const groups = groupBy(edits, e => JSON.stringify(e.cells.map(([, to]) => to)));
-  return [...groups.values()].flatMap(list => chunk(list).map(part => ['BulkUpdateRecord', destTable, part.map(e => e.id),
-    Object.fromEntries(part[0].cells.map(([, to], i) => [to, part.map(e => e.cells[i][3])]))]));
+// écriture par groupe de lignes retouchées sur les mêmes colonnes, et fait revenir les lignes
+// effacées ici avec toutes leurs valeurs (`copyCols`).
+export function restoreActions(edits, destTable, copyCols) {
+  const changed = edits.filter(e => !e.gone);
+  const back = edits.filter(e => e.gone);
+  const groups = groupBy(changed, e => JSON.stringify(e.cells.map(([, to]) => to)));
+  return [
+    ...[...groups.values()].flatMap(list => chunk(list).map(part => ['BulkUpdateRecord', destTable, part.map(e => e.id),
+      Object.fromEntries(part[0].cells.map(([, to], i) => [to, part.map(e => e.cells[i][3])]))])),
+    ...chunk(back).map(part => ['BulkAddOrUpdateRecord', destTable, { [KEY_COL]: part.map(e => e.key) },
+      Object.fromEntries(copyCols.map(([from, to]) => [to, part.map(e => e.row[from] ?? null)])), { on_many: 'all' }]),
+  ];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -131,16 +159,19 @@ function indexDest(destRows, matchCol) {
 // puis revenue figure dans la dernière liste, pas dans celle d'avant, et les deux peuvent attendre
 // le même passage, dans un ordre quelconque (file de Grist).
 // Rend les clés (`gone`) et, pour l'historique, [version, date d'arrivée de la liste] de celles que
-// la destination a (`listGone`) ; note dans `marks` les listes traitées.
+// la destination a (`listGone`) ; les versions déjà recopiées des autres (`leftGone`, effacées ici
+// avant de partir de la SOURCE) ; note dans `marks` les listes traitées.
 function droppedKeys(pending, latest, destByKey, marks) {
   const gone = new Set();
   const listGone = [];
+  const leftGone = [];
   const known = [...new Set([...destByKey.keys(), ...latest.keys()])];
   const drop = (key, t, listRow) => {
     const version = latest.get(key);
     if (gone.has(key) || (version && (t === null ? version.id > listRow.id : compareOrder(version.order, t) > 0))) return;
     gone.add(key);
     if (version && destByKey.has(key)) listGone.push([version.id, listRow[RECEIVED_COL] ?? null]);
+    else if (version && isTrue(version.row[APPLIED_COL]) && !SETTLED_GONE.has(version.row[STATE_COL])) leftGone.push(version.id);
   };
   const newest = new Map(); // seau -> { t, keys, row } : la liste la plus récente qui le couvre
   const cover = (bucket, t, keys, row) => {
@@ -165,7 +196,7 @@ function droppedKeys(pending, latest, destByKey, marks) {
     const present = new Set(full.list.full);
     known.filter(key => !present.has(key)).forEach(key => drop(key, null, full.row));
   }
-  return { gone, listGone };
+  return { gone, listGone, leftGone };
 }
 
 const newest = rows => rows.map(r => r[ORDER_COL]).reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b), null);
@@ -187,7 +218,7 @@ function versionState(ctx, plan, key, version) {
   // Échange : la version reçue n'a d'effet que si elle est plus récente que la ligne d'ici.
   if (ctx.exchange && here && compareOrder(version.order, newest(here)) <= 0) return '';
   if (isTrue(version.row[DELETE_COL])) plan.gone.add(key);
-  if (plan.gone.has(key)) return here ? 'suppression' : '';
+  if (plan.gone.has(key)) return here ? 'suppression' : LEFT;
   const candidates = !here && ctx.matchFrom ? ctx.dest.unkeyed.get(version.row[ctx.matchFrom]) : null;
   if (candidates && candidates.length) {
     const row = candidates.shift();
@@ -203,7 +234,7 @@ function versionState(ctx, plan, key, version) {
 
 // Le plan en actions Grist : ajouts et modifications par clé, rattachements, suppressions, puis
 // marques dans le journal et, pour l'historique, ce qui a été remplacé.
-function consolidationActions({ destTable, journalTable, copyCols, exchange }, { upserts, attached, removeIds, marks, listGone, before }) {
+function consolidationActions({ destTable, journalTable, copyCols, exchange }, { upserts, attached, removeIds, marks, listGone, leftGone, before }) {
   const values = (versions) => {
     const out = Object.fromEntries(copyCols.map(([from, to]) => [to, versions.map(v => v.row[from] ?? null)]));
     return exchange ? { ...out, [ORDER_COL]: versions.map(v => v.order ?? null) } : out;
@@ -217,6 +248,7 @@ function consolidationActions({ destTable, journalTable, copyCols, exchange }, {
       { [APPLIED_COL]: part.map(() => true), [STATE_COL]: part.map(([, state]) => state) }]),
     ...chunk(listGone).map(part => ['BulkUpdateRecord', journalTable, part.map(([id]) => id),
       { [STATE_COL]: part.map(() => 'suppression'), [RECEIVED_COL]: part.map(([, at]) => at) }]),
+    ...chunk(leftGone).map(part => ['BulkUpdateRecord', journalTable, part, { [STATE_COL]: part.map(() => LEFT) }]),
     ...chunk([...before]).map(part => ['BulkUpdateRecord', journalTable, part.map(([id]) => id),
       { [BEFORE_COL]: part.map(([, was]) => JSON.stringify(was)) }]),
   ];
@@ -244,7 +276,7 @@ export function planConsolidation({ journalRows, destRows, copyCols, destTable, 
   const latest = latestByKey(journalRows);
   const marks = new Map(); // ligne du journal -> effet ('' pour une liste ou une version sans effet)
   const pending = pendingLists(journalRows);
-  const { gone, listGone } = exchange ? { gone: new Set(), listGone: [] } : droppedKeys(pending, latest, dest.byKey, marks);
+  const { gone, listGone, leftGone } = exchange ? { gone: new Set(), listGone: [], leftGone: [] } : droppedKeys(pending, latest, dest.byKey, marks);
   if (exchange) pending.forEach(({ row }) => marks.set(row.id, ''));
   const ctx = {
     dest, copyCols, exchange,
@@ -266,5 +298,5 @@ export function planConsolidation({ journalRows, destRows, copyCols, destTable, 
     const numbers = rowNumbers(destRows);
     for (const key of removed) if (latest.has(key)) plan.before.set(latest.get(key).id, { n: numbers.get(key) });
   }
-  return { actions: consolidationActions({ destTable, journalTable, copyCols, exchange }, { ...plan, removeIds, listGone }), stats: plan.stats };
+  return { actions: consolidationActions({ destTable, journalTable, copyCols, exchange }, { ...plan, removeIds, listGone, leftGone }), stats: plan.stats, gone };
 }

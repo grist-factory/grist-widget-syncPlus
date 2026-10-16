@@ -154,7 +154,11 @@ la seule personne concernée.
   qui lit le journal comme les versions reçues ; la clé du formulaire ne lit pas les lignes, et la
   purge efface les versions remplacées. Qui a la clé peut écrire cette colonne : l'historique
   montrerait un « avant » faux, comme le ferait une version forgée ; rien n'est recopié depuis
-  elle. Les valeurs retouchées à la main se calculent à l'affichage, sans rien écrire.
+  elle. Les retouches faites à la main se calculent à l'affichage ; seules deux marques s'écrivent :
+  une colonne reçue effacée ici, dans la note du journal (que la clé ne peut pas écrire), et l'état
+  `partie` d'une version dont la ligne a quitté la SOURCE alors qu'elle n'était plus ici. Qui a la
+  clé peut écrire cet état sur une version : la carte tairait alors une ligne effacée ici, rien de
+  plus ; « Corriger » ne recopie que les dernières versions reçues, comme la recopie normale.
 - **Rattachement** : si la CIBLE a choisi une colonne commune pour une table existante, une ligne
   locale sans clé dont la valeur est égale à celle d'une ligne reçue est rattachée à celle-ci
   (puis tenue à jour par la SOURCE).

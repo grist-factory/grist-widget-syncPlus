@@ -19,6 +19,10 @@ const DRIFT_MAX = 10;
 let container;
 let wizardOpened = false; // l'assistant ne se rouvre seul qu'une fois par chargement
 const offered = new Set(); // tables déjà proposées en fenêtre pendant ce chargement
+// Historiques et lignes d'historique ouverts : repliés par défaut, ils le restent d'un dessin à
+// l'autre de l'onglet (un passage qui change quelque chose le redessine).
+const opened = new Set();
+const keepOpen = id => e => (e.currentTarget.open ? opened.add(id) : opened.delete(id));
 
 // Redessine l'onglet s'il est affiché (un passage de la recopie a changé quelque chose).
 export async function refreshTarget() {
@@ -225,29 +229,35 @@ const cell = (value, type, kind = '') => {
 const miniGrid = (head, rows) => el('div', { class: 'mini-grid-wrap' }, el('table', { class: 'mini-grid' },
   el('thead', {}, el('tr', {}, head.map(h => el('th', { scope: 'col' }, h)))), el('tbody', {}, rows)));
 
-// Valeurs retouchées à la main dans une destination : chaque cellule qui diffère de la dernière
-// version reçue, avec son numéro de ligne. Elles restent jusqu'à ce que la SOURCE change leur ligne,
-// ou que l'on clique sur « Corriger ».
+// Retouches faites à la main dans une destination : colonnes reçues effacées, cellules qui
+// diffèrent de la dernière version reçue (avec leur numéro de ligne), lignes reçues effacées. Elles
+// restent jusqu'à ce que la SOURCE change leur ligne, ou que l'on clique sur « Corriger ».
 function driftBlock(group, entry) {
   const result = state.results.get(tableKey(group.journal, entry.table)) || {};
-  const cells = (result.drift || []).flatMap(d => d.cells.map(c => ({ ...d, c })));
-  const total = result.driftCells || cells.length;
-  if (!cells.length) return null;
+  const total = result.driftCount || 0;
+  if (!total) return null;
   const types = result.types || {};
-  const rows = cells.slice(0, DRIFT_MAX).map(({ n, label, c: [from, to, here, source] }) => el('tr', {},
-    el('td', { class: 'mg-n' }, n ? String(n) : ''), el('td', { title: label }, label), el('td', {}, to),
-    cell(here, types[from], 'mg-here'), cell(source, types[from], 'mg-source')));
+  const said = (text, span) => el('td', { class: 'mg-here', colspan: String(span) }, text);
+  const rows = [
+    ...(result.droppedCols || []).map(([, to]) => el('tr', {}, el('td', {}), el('td', {}), el('td', {}, to), said(t('recv.drift.colGone'), 2))),
+    ...(result.drift || []).flatMap(d => (d.gone
+      ? [el('tr', {}, el('td', { class: 'mg-n' }), el('td', { title: d.label }, d.label), said(t('recv.drift.rowGone'), 3))]
+      : d.cells.map(([from, to, here, source]) => el('tr', {}, el('td', { class: 'mg-n' }, d.n ? String(d.n) : ''), el('td', { title: d.label }, d.label),
+        el('td', {}, to), cell(here, types[from], 'mg-here'), cell(source, types[from], 'mg-source'))))),
+  ].slice(0, DRIFT_MAX);
   return el('div', { class: 'msg msg-warn drift', role: 'status' },
     el('strong', {}, t('recv.drift.title', { dest: entry.dest, n: total })),
     el('p', { class: 'small' }, t('recv.drift.body', { n: total })),
     miniGrid([t('recv.drift.row'), result.labelCol || '', t('recv.drift.col'), t('recv.drift.here'), t('recv.drift.source')], rows),
-    total > DRIFT_MAX ? el('p', { class: 'small' }, t('recv.history.more', { n: total - DRIFT_MAX })) : null,
-    el('div', { class: 'card-actions' }, button(t('recv.drift.fix'), 'check', e => run(e.currentTarget, container.querySelector('.out'), () => correct(group, entry, total)))));
+    total > rows.length ? el('p', { class: 'small' }, t('recv.history.more', { n: total - rows.length })) : null,
+    el('div', { class: 'card-actions' }, button(t('recv.drift.fix'), 'check', e => run(e.currentTarget, container.querySelector('.out'), () => correct(group, entry, result)))));
 }
 
-// « Corriger » : les valeurs retouchées reprennent celles de la SOURCE, après confirmation.
-async function correct(group, entry, n) {
-  if (!(await confirmDialog({ title: t('recv.drift.fixTitle', { dest: entry.dest }), body: t('recv.drift.fixBody', { n }), confirmLabel: t('recv.drift.fix') }))) return;
+// « Corriger » : la table reprend l'état exact de la SOURCE, après confirmation.
+async function correct(group, entry, { driftCount, driftGone = 0, droppedCols = [] }) {
+  const body = [t('recv.drift.fixBody', { n: driftCount }), driftGone ? t('recv.drift.fixRows', { n: driftGone }) : '',
+    droppedCols.length ? t('recv.drift.fixCols', { n: droppedCols.length }) : ''].filter(Boolean).join(' ');
+  if (!(await confirmDialog({ title: t('recv.drift.fixTitle', { dest: entry.dest }), body, confirmLabel: t('recv.drift.fix') }))) return;
   await restoreSource(group.journal, entry.table);
   await renderTarget();
 }
@@ -256,7 +266,7 @@ async function correct(group, entry, n) {
 // Historique : lignes changées depuis la visite précédente, par table de destination : compteurs
 // par état (ajoutées, modifiées, supprimées), puis les plus récentes (HISTORY_MAX par table),
 // numérotées comme dans la table et nommées par la colonne choisie pour chaque table. Chacune
-// s'ouvre sur son avant et son après (ouvert pour une modification).
+// s'ouvre au clic sur son avant et son après. Tout est replié par défaut.
 
 const STATE_ICON = { ajout: 'plus', modif: 'edit', suppression: 'minus' };
 
@@ -274,7 +284,7 @@ function when(at) {
     : date.toLocaleString(LANG, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function historyRow(c, types) {
+function historyRow(c, types, id) {
   const gone = c.state === 'suppression';
   const line = [
     el('span', { class: 'chg-n', title: c.n ? t(gone ? 'recv.history.rowGone' : 'recv.history.row', { n: c.n }) : null }, c.n ? String(c.n) : ''),
@@ -287,24 +297,24 @@ function historyRow(c, types) {
   const { cols, before, after } = c.detail;
   const values = (kind, list) => list && el('tr', { class: `mg-${kind}` }, el('th', { scope: 'row' }, t(`recv.history.${kind}`)),
     list.map((v, i) => cell(v, types[cols[i][0]])));
-  return el('li', { class: `chg-item chg-${c.state}` }, el('details', { open: c.state === 'modif' },
+  return el('li', { class: `chg-item chg-${c.state}` }, el('details', { open: opened.has(id), ontoggle: keepOpen(id) },
     el('summary', { class: rowClass }, line),
     miniGrid(['', ...cols.map(([, to]) => to)], [values('before', before), values('after', after)])));
 }
 
-const historyTable = ({ dest, items, types }) => (items.length ? el('section', { class: 'history-table' },
+const historyTable = ({ id, dest, items, types }) => (items.length ? el('section', { class: 'history-table' },
   el('div', { class: 'history-head' }, el('strong', {}, dest), stateCounts(items)),
-  el('ul', { class: 'history-rows' }, items.slice(0, HISTORY_MAX).map(c => historyRow(c, types))),
+  el('ul', { class: 'history-rows' }, items.slice(0, HISTORY_MAX).map(c => historyRow(c, types, `${id}|${c.key}|${c.at}`))),
   items.length > HISTORY_MAX ? el('p', { class: 'muted small' }, t('recv.history.more', { n: items.length - HISTORY_MAX })) : null) : null);
 
 function history(group) {
   const tables = group.note.tables.map((tb) => {
     const result = state.results.get(tableKey(group.journal, tb.table)) || {};
-    return { dest: tb.dest, items: result.recent || [], types: result.types || {} };
+    return { id: tableKey(group.journal, tb.table), dest: tb.dest, items: result.recent || [], types: result.types || {} };
   });
   const all = tables.flatMap(tb => tb.items);
   if (!all.length) return el('p', { class: 'muted small' }, t('recv.history.none'));
-  return el('details', { class: 'history', open: true },
+  return el('details', { class: 'history', open: opened.has(group.journal), ontoggle: keepOpen(group.journal) },
     el('summary', {}, el('span', { class: 'history-title' }, t(state.lastVisit ? 'recv.history.since' : 'recv.history.last')), stateCounts(all)),
     tables.map(historyTable),
     el('button', { class: 'btn btn-small btn-link', type: 'button', disabled: state.readOnly, onclick: () => labelDialog(group) }, t('recv.label.change')));

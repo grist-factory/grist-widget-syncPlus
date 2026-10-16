@@ -4,7 +4,7 @@
 import { EXPORT_COL, KEY_COL, KIND, LIST_COL, RESEND_COL, SYNC_TABLE, TABLE_COL, TYPE_COL, randomHex } from '../logic/common.js';
 import { exchangeColumns, exportTables } from '../logic/exports.js';
 import { awaitingPartner, expandRows, isRaw, nextGaps, planPull, planPurge, planUnpack, recentChanges, rowsByTable, sentColumns } from '../logic/journal.js';
-import { copyColumns, destRefs, followRenames, manualEdits, newColumnsMap, planConsolidation, restoreActions, rowNumbers } from '../logic/consolidation.js';
+import { copyColumns, destRefs, droppedColumns, followRenames, manualEdits, newColumnsMap, planConsolidation, restoreActions, rowNumbers } from '../logic/consolidation.js';
 import { apply, docIdentity, fetchRows, gristFetch, readSchema, withLock } from '../grist.js';
 import { addDestColumnsActions, destColumns, receivedJournals, updateJournalNote, upgradeJournal } from './journals.js';
 import { syncRows } from '../source/synchro.js';
@@ -26,9 +26,11 @@ const DRIFT_KEPT = 20;
 
 // Ce que l'onglet montre. `results` : dernier passage par journal ({ at, rows, gaps } ; { at,
 // error, text } en cas d'erreur) et par table reçue (clé `journal|table` : { at, text, table,
-// stats, recent, dest, copyCols, labelCol, labelCols, types, drift, driftCells }, ou { at, error, text }).
-// `drift` : les premières lignes retouchées à la main (DRIFT_KEPT), `driftCells` : le nombre de
-// cellules retouchées en tout. `offers` : tables proposées par
+// stats, recent, dest, copyCols, labelCol, labelCols, types, drift, droppedCols, driftCount,
+// driftGone }, ou { at, error, text }). `drift` : les premières lignes retouchées à la main
+// (DRIFT_KEPT), `droppedCols` : les colonnes reçues effacées ici ([colonne du journal, d'ici]),
+// `driftCount` : le nombre de retouches en tout (cellules, lignes et colonnes effacées),
+// `driftGone` : celui des lignes effacées. `offers` : tables proposées par
 // journal ([{ table, columns, n }]). `readOnly` : le document refuse l'écriture (lecteur).
 // `lastVisit` : date de la visite précédente sur ce document (secondes), ou 0.
 export const state = { results: new Map(), offers: new Map(), readOnly: false, viewer: false, lastVisit: null };
@@ -164,21 +166,25 @@ function receivedColumns(entry, tableRows, schema, allowed) {
   return { sent, entry: map ? { ...next, map } : next };
 }
 
-// Recopie d'une table dans sa destination (une colonne nouvelle y est d'abord ajoutée). Rend
-// l'entrée à jour (destination renommée, correspondance), les compteurs, les colonnes recopiées
-// et leurs types, les numéros de ligne et les valeurs retouchées à la main (lus après la recopie).
+// Recopie d'une table dans sa destination (une colonne nouvelle y est d'abord ajoutée ; une colonne
+// effacée ici ne l'est pas, elle est notée). Rend l'entrée à jour (destination renommée,
+// correspondance, colonnes effacées), les compteurs, les colonnes recopiées et leurs types, les
+// numéros de ligne et les retouches faites à la main (lus après la recopie).
 async function copyTable(ctx, noted) {
   const { journal, groups, exchange, swap, allowedFor } = ctx;
   let entry = followRenames(noted, ctx.schema);
   if (!ctx.schema.has(entry.dest)) return { entry, error: t('error.destMissing', { dest: entry.dest }) };
   const tableRows = groups.get(entry.table) || [];
   const received = receivedColumns(entry, tableRows, ctx.schema, allowedFor(entry.dest));
-  const added = addDestColumnsActions(ctx.schema, received.entry.dest, received.sent, received.entry.map);
+  // Échange : une colonne effacée est recréée, comme avant (la destination repart vers l'autre document).
+  const dropped = exchange ? [] : droppedColumns(received.entry, received.sent, ctx.schema.columns(received.entry.dest).map(c => c.colId));
+  const kept = received.sent.filter(c => !dropped.some(([from]) => from === c.id));
+  const added = addDestColumnsActions(ctx.schema, received.entry.dest, kept, received.entry.map);
   if (added.length) {
     await apply(added);
     ctx.schema = await readSchema();
   }
-  entry = { ...received.entry, refs: destRefs(ctx.schema, received.entry.dest) };
+  entry = { ...received.entry, refs: destRefs(ctx.schema, received.entry.dest), dropped: dropped.length ? dropped.map(([, to]) => to) : undefined };
   const copyCols = copyColumns(received.sent.map(c => ({ colId: c.id })), ctx.schema.columns(entry.dest), entry.map);
   const types = Object.fromEntries(received.sent.map(c => [c.id, c.type]));
   // La destination n'est relue que si le journal de cette table a changé depuis le dernier
@@ -187,10 +193,10 @@ async function copyTable(ctx, noted) {
   const signature = JSON.stringify([tableRows.map(r => r.id), copyCols, entry.match || '', entry.dest]);
   const was = settled.get(key);
   if (was && was.signature === signature && Date.now() - was.at < REREAD_MS && lastRead.has(key)) {
-    return { entry, stats: { added: 0, updated: 0, removed: 0 }, copyCols, types, ...lastRead.get(key) };
+    return { entry, stats: { added: 0, updated: 0, removed: 0 }, copyCols, types, dropped, ...lastRead.get(key) };
   }
   const destRows = await fetchRows(entry.dest);
-  const { actions, stats } = planConsolidation({
+  const { actions, stats, gone } = planConsolidation({
     journalRows: tableRows, destRows, copyCols, destTable: entry.dest, journalTable: journal, matchCol: entry.match || '', exchange,
   });
   // Échange : la ligne 'echange' de l'export est touchée dans le même lot (voir syncFormulas) :
@@ -200,8 +206,8 @@ async function copyTable(ctx, noted) {
   if (actions.length) settled.delete(key);
   else settled.set(key, { signature, at: Date.now() });
   const after = written ? await fetchRows(entry.dest) : destRows;
-  lastRead.set(key, { numbers: rowNumbers(after), drift: manualEdits({ journalRows: tableRows, destRows: after, copyCols, exchange }) });
-  return { entry, stats, copyCols, types, ...lastRead.get(key) };
+  lastRead.set(key, { numbers: rowNumbers(after), drift: manualEdits({ journalRows: tableRows, destRows: after, copyCols, exchange, except: gone }) });
+  return { entry, stats, copyCols, types, dropped, ...lastRead.get(key) };
 }
 
 // Contexte de la recopie d'un journal. Échange : la ligne 'echange' de l'export et, côté du
@@ -221,41 +227,50 @@ async function copyContext(schema, journal, note, groups) {
 // CIBLE : l'export de retour suit.
 async function saveEntries(journal, note, updates) {
   if (!updates.size) return;
-  const noted = ({ dest, map, match, refs }) => JSON.parse(JSON.stringify({ dest, map, match, refs }));
-  const tables = note.tables.map(tb => (updates.has(tb.table) ? { ...tb, ...noted(updates.get(tb.table)) } : tb));
+  const noted = ({ dest, map, match, refs, dropped }) => JSON.parse(JSON.stringify({ dest, map, match, refs, dropped }));
+  const tables = note.tables.map(tb => (updates.has(tb.table) ? { ...tb, dropped: undefined, ...noted(updates.get(tb.table)) } : tb));
   await updateJournalNote(journal, n => ({ ...n, tables }));
   if (note.mode === 'echange' && !note.retour) await wireExchange({ ...note, tables });
 }
 
-// Valeurs retouchées gardées pour la carte : les premières lignes, nommées, et le compte des cellules.
-const driftResult = (drift, labelCol) => ({
-  drift: drift.slice(0, DRIFT_KEPT).map(({ n, row, cells }) => ({ n, label: labelCol ? String(row[labelCol] ?? '') : '', cells })),
-  driftCells: drift.reduce((sum, d) => sum + d.cells.length, 0),
+// Retouches gardées pour la carte : les premières lignes, nommées, les colonnes effacées et les comptes.
+const driftResult = (drift, labelCol, droppedCols) => ({
+  drift: drift.slice(0, DRIFT_KEPT).map(({ n, row, cells, gone }) => ({ n, label: labelCol ? String(row[labelCol] ?? '') : '', cells, ...(gone ? { gone } : {}) })),
+  droppedCols,
+  driftCount: drift.reduce((sum, d) => sum + (d.gone ? 1 : d.cells.length), 0) + droppedCols.length,
+  driftGone: drift.filter(d => d.gone).length,
 });
 
 // Ce que la carte montre d'une table : compteurs, colonne qui nomme les lignes, historique,
 // valeurs retouchées à la main (`drift`).
-function tableResult({ entry, stats, copyCols, types, numbers, drift, error }, groups) {
+function tableResult({ entry, stats, copyCols, types, numbers, drift, dropped, error }, groups) {
   if (error) return { table: entry.table, error };
   const labelCol = copyCols.some(([from]) => from === entry.label) ? entry.label : (copyCols[0] || [])[0];
   const recent = recentChanges(groups.get(entry.table) || [], labelCol, state.lastVisit, Infinity, { copyCols, numbers });
-  return { table: entry.table, stats, dest: entry.dest, copyCols, labelCol, labelCols: copyCols.map(([c]) => c), types, recent, ...driftResult(drift, labelCol) };
+  return { table: entry.table, stats, dest: entry.dest, copyCols, labelCol, labelCols: copyCols.map(([c]) => c), types, recent, ...driftResult(drift, labelCol, dropped) };
 }
 
-// « Corriger » : les cellules retouchées à la main d'une table reçue, relues au moment du clic,
-// reprennent la valeur de la SOURCE (la dernière version reçue). La carte est mise à jour aussitôt.
+// « Corriger » : une table reçue reprend l'état exact de la SOURCE (la dernière version reçue de
+// chaque ligne), relu au moment du clic : les colonnes effacées ici sont recréées, les lignes
+// effacées reviennent, les cellules retouchées reprennent leur valeur. La carte suit aussitôt.
 export async function restoreSource(journal, table) {
   const key = tableKey(journal, table);
   const result = state.results.get(key);
   if (!result || !result.copyCols) return;
-  const { dest, copyCols, labelCol } = result;
+  const { dest, labelCol, types = {}, droppedCols = [] } = result;
+  const copyCols = [...result.copyCols, ...droppedCols];
   await withLock('gristsync-consolidation', async () => {
+    if (droppedCols.length) {
+      const columns = droppedCols.map(([from]) => ({ id: from, type: types[from] || 'Any', label: from }));
+      await apply(addDestColumnsActions(await readSchema(), dest, columns, Object.fromEntries(droppedCols)));
+      await updateJournalNote(journal, n => ({ ...n, tables: n.tables.map(tb => (tb.table === table ? { ...tb, dropped: undefined } : tb)) }));
+    }
     const journalRows = rowsByTable(expandRows(await fetchRows(journal))).get(table) || [];
-    await apply(restoreActions(manualEdits({ journalRows, destRows: await fetchRows(dest), copyCols }), dest));
+    await apply(restoreActions(manualEdits({ journalRows, destRows: await fetchRows(dest), copyCols }), dest, copyCols));
     const after = await fetchRows(dest);
     const drift = manualEdits({ journalRows, destRows: after, copyCols });
     lastRead.set(key, { numbers: rowNumbers(after), drift });
-    state.results.set(key, { ...state.results.get(key), ...driftResult(drift, labelCol) });
+    state.results.set(key, { ...state.results.get(key), copyCols, ...driftResult(drift, labelCol, []) });
   });
 }
 
@@ -298,7 +313,7 @@ function notePass(journal, pass, before, offersBefore, at) {
     const was = state.results.get(key);
     state.results.set(key, tb.error ? { at, error: true, text: tb.error } : { at, text: summary(tb.stats), ...tb });
     changed ||= Boolean(tb.error) !== Boolean(was && was.error) || Boolean(tb.stats && tb.stats.added + tb.stats.updated + tb.stats.removed)
-      || JSON.stringify([(was && was.drift) || [], (was && was.driftCells) || 0]) !== JSON.stringify([tb.drift || [], tb.driftCells || 0]);
+      || JSON.stringify([(was && was.drift) || [], (was && was.driftCount) || 0]) !== JSON.stringify([tb.drift || [], tb.driftCount || 0]);
   }
   return changed;
 }

@@ -127,12 +127,12 @@ const SECTIONS = [
     title: ['Au quotidien, côté CIBLE', 'Day to day, TARGET side'],
     text: [[
       'Chaque changement de la SOURCE arrive dans le journal en une seconde environ, même page fermée. La recopie dans vos tables se fait quand un éditeur ouvre la page du widget (même replié), puis toutes les 10 secondes.',
-      'L’historique montre, par table, les lignes ajoutées, modifiées et supprimées depuis votre dernière visite, avec leur numéro de ligne et nommées par la colonne de votre choix. Une modification montre ses valeurs avant et après ; un ajout ou une suppression s’ouvre au clic.',
-      'Une retouche faite à la main reste en place jusqu’à la prochaine modification de la même ligne dans la SOURCE ; d’ici là, la carte la signale avec la valeur d’ici et celle de la SOURCE, et « Corriger » remet la valeur de la SOURCE. Arrêter la réception efface le journal et garde vos tables.',
+      'L’historique montre, par table, les lignes ajoutées, modifiées et supprimées depuis votre dernière visite, avec leur numéro de ligne et nommées par la colonne de votre choix. Il est replié, comme chacune de ses lignes, qui s’ouvre au clic sur ses valeurs avant et après.',
+      'Une valeur, une ligne ou une colonne modifiée ou supprimée à la main reste ainsi jusqu’à la prochaine modification de la même ligne dans la SOURCE ; d’ici là, la carte la signale avec la valeur d’ici et celle de la SOURCE, et « Corriger » remet l’état exact de la SOURCE. Arrêter la réception efface le journal et garde vos tables.',
     ], [
       'Each SOURCE change reaches the journal in about a second, even with the page closed. Copying into your tables happens when an editor opens the widget page (even collapsed), then every 10 seconds.',
-      'The history shows, per table, the rows added, changed and deleted since your last visit, with their row number and named by the column of your choice. A change shows its values before and after; an addition or a deletion opens on click.',
-      'A manual edit stays until the same row changes again in the SOURCE; until then, the card flags it with the value here and the SOURCE value, and “Fix” puts the SOURCE value back. Stop receiving deletes the journal and keeps your tables.',
+      'The history shows, per table, the rows added, changed and deleted since your last visit, with their row number and named by the column of your choice. It is collapsed, like each of its rows, which opens on click on its values before and after.',
+      'A value, a row or a column changed or deleted by hand stays that way until the same row changes again in the SOURCE; until then, the card flags it with the value here and the SOURCE value, and “Fix” puts the exact SOURCE state back. Stop receiving deletes the journal and keeps your tables.',
     ]],
     images: ['14-cible-historique'] },
   { id: 't-offer', role: 'target',
