@@ -6,7 +6,7 @@
 // envoie. Une ligne brute qui ne peut pas venir du webhook de cet export est tout de même effacée
 // sans effet et comptée, et rien de ce qui est lu ne peut servir de nom propre aux objets JavaScript.
 import {
-  APPLIED_COL, BUCKETS, DATA_COL, DELETE_COL, EXPORT_COL, KEY_COL, KIND, LIST_COL, LIST_PREFIX, LOT_COL, ORDER_COL, RECEIVED_COL, RESEND_COL,
+  APPLIED_COL, BEFORE_COL, BUCKETS, DATA_COL, DELETE_COL, EXPORT_COL, KEY_COL, KIND, LIST_COL, LIST_PREFIX, LOT_COL, ORDER_COL, RECEIVED_COL, RESEND_COL,
   SCHEMA_COL, STATE_COL, TABLE_COL, TYPE_COL, chunk, groupBy, isBlank, isSafeId, isTrue, parseJson,
 } from './common.js';
 import { exportSchema, validColumns } from './codes.js';
@@ -280,14 +280,32 @@ export function planPurge(journalRows, journalTable, { keep = [], drop = [] } = 
 }
 
 // Historique : dernière version de chaque clé recopiée avec un effet connu, arrivée après `since`
-// (secondes), la plus récente d'abord, au plus `max`. `labelCol` nomme la ligne.
+// (secondes), la plus récente d'abord, au plus `max`. `labelCol` nomme la ligne ; `n` est son
+// numéro dans la destination (`numbers`, voir rowNumbers), celui qu'elle avait pour une ligne
+// supprimée ; `detail` montre avant et après sur les colonnes recopiées (`copyCols`).
 export const STATES = ['ajout', 'modif', 'suppression'];
-export function recentChanges(journalRows, labelCol, since, max) {
+export function recentChanges(journalRows, labelCol, since, max, { copyCols = [], numbers = new Map() } = {}) {
   return [...latestByKey(journalRows).values()]
     .map(v => ({ at: v.row[RECEIVED_COL] ?? v.order, state: v.row[STATE_COL], row: v.row }))
     .filter(c => STATES.includes(c.state) && typeof c.at === 'number' && c.at > since)
     .sort((a, b) => b.at - a.at).slice(0, max)
-    .map(c => ({ at: c.at, label: labelCol ? String(c.row[labelCol] ?? '') : '', state: c.state }));
+    .map((c) => {
+      const was = parseJson(c.row[BEFORE_COL]) || {};
+      const gone = c.state === 'suppression';
+      const n = gone ? (Number.isInteger(was.n) && was.n > 0 ? was.n : null) : numbers.get(c.row[KEY_COL]) || null;
+      return { at: c.at, label: labelCol ? String(c.row[labelCol] ?? '') : '', state: c.state, n, detail: changeDetail(c.state, c.row, copyCols, was) };
+    });
+}
+
+// Avant et après d'un changement, sur des colonnes [colonne du journal, colonne d'ici] : un ajout
+// montre toutes les colonnes après, une suppression toutes avant (dernière version reçue), une
+// modification celles qu'elle a remplacées (`Sync_Avant`). null s'il n'y a rien à montrer.
+function changeDetail(state, row, copyCols, was) {
+  const values = cols => cols.map(([from]) => row[from] ?? null);
+  if (state !== 'modif') return copyCols.length ? { cols: copyCols, before: state === 'ajout' ? null : values(copyCols), after: state === 'ajout' ? values(copyCols) : null } : null;
+  const v = was.v && typeof was.v === 'object' && !Array.isArray(was.v) ? was.v : {};
+  const cols = copyCols.filter(([from]) => Object.hasOwn(v, from));
+  return cols.length ? { cols, before: cols.map(([from]) => v[from]), after: values(cols) } : null;
 }
 
 // ---------------------------------------------------------------------------------------------

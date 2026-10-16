@@ -1,5 +1,7 @@
 // Onglet « Recevoir » (document CIBLE) : une carte par export reçu, avec ses tables, ce qui manque,
-// les arrivées suspectes et l'historique des changements. Un journal encore vide attend son lien.
+// les arrivées suspectes, les valeurs retouchées à la main et l'historique des changements. Un
+// journal encore vide attend son lien.
+import { isBlank } from '../logic/common.js';
 import { STATES, awaitingPartner } from '../logic/journal.js';
 import { fetchRows, isReadOnly, readSchema } from '../grist.js';
 import { dropPages, ensureForm, formPages, removeTechnicalTables, renewFormLink } from '../pages.js';
@@ -13,6 +15,7 @@ import { roleGuide } from '../guide.js';
 import { LANG, dateText, t } from '../i18n.js';
 
 const HISTORY_MAX = 20;
+const DRIFT_MAX = 10;
 let container;
 let wizardOpened = false; // l'assistant ne se rouvre seul qu'une fois par chargement
 const offered = new Set(); // tables déjà proposées en fenêtre pendant ce chargement
@@ -53,7 +56,7 @@ export async function renderTarget(root = container) {
     else out.append(message('err', errorText(e)));
   }
   const legacy = legacyJournals(schema);
-  const sync = async () => { if ((await consolidateAll()) === false) out.replaceChildren(message('ok', t('recv.sync.none'))); };
+  const sync = async () => { if ((await consolidateAll({ reread: true })) === false) out.replaceChildren(message('ok', t('recv.sync.none'))); };
   const toolbar = el('div', { class: 'toolbar' },
     el('button', { class: 'btn btn-primary', type: 'button', disabled: state.readOnly, onclick: () => receiveWizard(null, renderTarget) }, icon('plus'), t('recv.new')),
     el('button', { class: 'btn', type: 'button', disabled: state.readOnly || !groups.length, onclick: e => run(e.currentTarget, out, sync) }, icon('refresh'), t('recv.action.sync')));
@@ -133,6 +136,7 @@ function syncCard(group) {
     note.mode === 'echange' ? el('p', { class: 'muted small' }, t('recv.exchange')) : null,
     note.tables.map(entry => tableLine(group, entry)),
     cardNotes(group),
+    note.tables.map(entry => driftBlock(group, entry)),
     group.waiting ? null : history(group),
     el('div', { class: 'card-actions' },
       group.public || note.retour ? null : button(t(group.waiting ? 'recv.action.continue' : 'recv.action.link'), 'link', () => receiveWizard(group, renderTarget), group.waiting ? 'btn-primary' : ''),
@@ -196,9 +200,54 @@ async function stopReceiving(group) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Valeurs en petit tableau, comme dans une vue Grist.
+
+// Texte d'une valeur reçue ou lue dans la destination : liste de choix, date, case à cocher.
+function cellText(value, type = '') {
+  if (Array.isArray(value)) return value[0] === 'L' ? value.slice(1).join(', ') : JSON.stringify(value);
+  if (typeof value === 'boolean') return t(value ? 'common.yes' : 'common.no');
+  if (typeof value === 'number' && /^Date/.test(type)) {
+    const zone = type.startsWith('DateTime:') ? type.slice(9) : 'UTC';
+    try {
+      const date = new Date(value * 1000);
+      return type.startsWith('DateTime') ? date.toLocaleString(LANG, { timeZone: zone }) : date.toLocaleDateString(LANG, { timeZone: 'UTC' });
+    } catch (e) { /* fuseau inconnu : la valeur brute */ }
+  }
+  return value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+const cell = (value, type, kind = '') => {
+  if (isBlank(value)) return el('td', { class: `${kind} mg-blank` }, t('common.blank'));
+  const text = cellText(value, type);
+  return el('td', { class: kind, title: text }, text);
+};
+
+const miniGrid = (head, rows) => el('div', { class: 'mini-grid-wrap' }, el('table', { class: 'mini-grid' },
+  el('thead', {}, el('tr', {}, head.map(h => el('th', { scope: 'col' }, h)))), el('tbody', {}, rows)));
+
+// Valeurs retouchées à la main dans une destination : chaque cellule qui diffère de la dernière
+// version reçue, avec son numéro de ligne. Elles restent jusqu'à ce que la SOURCE change leur ligne.
+function driftBlock(group, entry) {
+  const result = state.results.get(tableKey(group.journal, entry.table)) || {};
+  const cells = (result.drift || []).flatMap(d => d.cells.map(c => ({ ...d, c })));
+  const total = result.driftCells || cells.length;
+  if (!cells.length) return null;
+  const types = result.types || {};
+  const rows = cells.slice(0, DRIFT_MAX).map(({ n, label, c: [from, to, here, source] }) => el('tr', {},
+    el('td', { class: 'mg-n' }, n ? String(n) : ''), el('td', { title: label }, label), el('td', {}, to),
+    cell(here, types[from], 'mg-here'), cell(source, types[from], 'mg-source')));
+  return el('div', { class: 'msg msg-warn drift', role: 'status' },
+    el('strong', {}, t('recv.drift.title', { dest: entry.dest, n: total })),
+    el('p', { class: 'small' }, t('recv.drift.body', { n: total })),
+    miniGrid([t('recv.drift.row'), result.labelCol || '', t('recv.drift.col'), t('recv.drift.here'), t('recv.drift.source')], rows),
+    total > DRIFT_MAX ? el('p', { class: 'small' }, t('recv.history.more', { n: total - DRIFT_MAX })) : null);
+}
+
+// ---------------------------------------------------------------------------------------------
 // Historique : lignes changées depuis la visite précédente, par table de destination : compteurs
 // par état (ajoutées, modifiées, supprimées), puis les plus récentes (HISTORY_MAX par table),
-// nommées par la colonne choisie pour chaque table.
+// numérotées comme dans la table et nommées par la colonne choisie pour chaque table. Chacune
+// s'ouvre sur son avant et son après (ouvert pour une modification).
 
 const STATE_ICON = { ajout: 'plus', modif: 'edit', suppression: 'minus' };
 
@@ -216,19 +265,34 @@ function when(at) {
     : date.toLocaleString(LANG, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const historyRow = c => el('li', { class: `chg-row chg-${c.state}` },
-  el('span', { class: 'chg-dot', title: t(`recv.history.${c.state}`) }, icon(STATE_ICON[c.state])),
-  el('span', { class: 'chg-label' }, c.label || '—'),
-  el('span', { class: 'chg-state' }, t(`recv.history.${c.state}`)),
-  el('time', { class: 'chg-time', datetime: new Date(c.at * 1000).toISOString() }, when(c.at)));
+function historyRow(c, types) {
+  const gone = c.state === 'suppression';
+  const line = [
+    el('span', { class: 'chg-n', title: c.n ? t(gone ? 'recv.history.rowGone' : 'recv.history.row', { n: c.n }) : null }, c.n ? String(c.n) : ''),
+    el('span', { class: 'chg-dot', title: t(`recv.history.${c.state}`) }, icon(STATE_ICON[c.state])),
+    el('span', { class: 'chg-label' }, c.label || '—'),
+    el('span', { class: 'chg-state' }, t(`recv.history.${c.state}`)),
+    el('time', { class: 'chg-time', datetime: new Date(c.at * 1000).toISOString() }, when(c.at))];
+  const rowClass = `chg-row chg-${c.state}`;
+  if (!c.detail) return el('li', { class: `chg-item chg-${c.state}` }, el('div', { class: rowClass }, line));
+  const { cols, before, after } = c.detail;
+  const values = (kind, list) => list && el('tr', { class: `mg-${kind}` }, el('th', { scope: 'row' }, t(`recv.history.${kind}`)),
+    list.map((v, i) => cell(v, types[cols[i][0]])));
+  return el('li', { class: `chg-item chg-${c.state}` }, el('details', { open: c.state === 'modif' },
+    el('summary', { class: rowClass }, line),
+    miniGrid(['', ...cols.map(([, to]) => to)], [values('before', before), values('after', after)])));
+}
 
-const historyTable = ({ dest, items }) => (items.length ? el('section', { class: 'history-table' },
+const historyTable = ({ dest, items, types }) => (items.length ? el('section', { class: 'history-table' },
   el('div', { class: 'history-head' }, el('strong', {}, dest), stateCounts(items)),
-  el('ul', { class: 'history-rows' }, items.slice(0, HISTORY_MAX).map(historyRow)),
+  el('ul', { class: 'history-rows' }, items.slice(0, HISTORY_MAX).map(c => historyRow(c, types))),
   items.length > HISTORY_MAX ? el('p', { class: 'muted small' }, t('recv.history.more', { n: items.length - HISTORY_MAX })) : null) : null);
 
 function history(group) {
-  const tables = group.note.tables.map(tb => ({ dest: tb.dest, items: (state.results.get(tableKey(group.journal, tb.table)) || {}).recent || [] }));
+  const tables = group.note.tables.map((tb) => {
+    const result = state.results.get(tableKey(group.journal, tb.table)) || {};
+    return { dest: tb.dest, items: result.recent || [], types: result.types || {} };
+  });
   const all = tables.flatMap(tb => tb.items);
   if (!all.length) return el('p', { class: 'muted small' }, t('recv.history.none'));
   return el('details', { class: 'history', open: true },

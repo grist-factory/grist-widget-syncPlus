@@ -204,9 +204,15 @@ qu'elle reste ouverte.
 
 La carte montre le propriétaire des données, chaque table reçue avec sa destination et son dernier
 passage, et l'historique : depuis votre dernière visite, par table, le nombre de lignes ajoutées,
-modifiées et supprimées, puis les lignes elles-mêmes (20 au plus par table), nommées par la colonne
-de votre choix. Une retouche faite à la main dans la CIBLE reste en place jusqu'à la prochaine
-modification de la même ligne dans la SOURCE. Une table ou une colonne de destination peut être
+modifiées et supprimées, puis les lignes elles-mêmes (20 au plus par table), avec leur numéro de
+ligne dans votre table et nommées par la colonne de votre choix. Une modification montre ses
+valeurs avant et après en petit tableau ; un ajout ou une suppression s'ouvre au clic.
+
+Une retouche faite à la main dans la CIBLE reste en place jusqu'à la prochaine modification de la
+même ligne dans la SOURCE, qui reprend alors toutes ses valeurs. En attendant, la carte la signale
+(« valeurs modifiées à la main ici ») avec, pour chaque cellule, le numéro de ligne, la valeur d'ici
+et celle de la SOURCE. Elle se met à jour à chaque recopie, au plus tard toutes les 5 minutes, ou
+tout de suite avec **Synchroniser**. Une table ou une colonne de destination peut être
 renommée : la recopie suit. **Arrêter la réception** efface le journal, son formulaire et sa page,
 et garde les tables de destination.
 

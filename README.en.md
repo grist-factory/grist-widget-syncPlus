@@ -11,7 +11,7 @@ No server to host, no dependencies, and only the columns you pick leave the docu
 
 <img src="docs/images/14-cible-historique.png" width="820" alt="The widget in the receiving document: the “Annuaire” export is up to date and lists the rows added, changed and deleted since the last visit">
 
-<sub>Version 0.5.3 · Grist 1.7.11 or later · GPL-3.0 license · Grist Factory</sub>
+<sub>Version 0.5.4 · Grist 1.7.11 or later · GPL-3.0 license · Grist Factory</sub>
 
 </div>
 
@@ -92,11 +92,11 @@ own picture help. The same walkthrough in French: [`docs/04-tutoriel.md`](docs/0
 - **Destinations of your choice**: new or existing table, matched columns, existing rows linked.
   A table added to the export later is offered in a dialog.
 - **Manual edits respected**: a fix made by hand in the TARGET stays until the row changes again
-  in the SOURCE.
+  in the SOURCE, and the card flags it with the detail (row, value here, SOURCE value).
 - **Large tables**: no row limit (tested with 21,000), big imports sent in batches, a stuck
   delivery queue is cleared and resent.
 - **Clear tracking**: one card per export and per reception, last delivery, errors explained,
-  history of changes since the last visit.
+  history of changes since the last visit, with row numbers and values before and after.
 - **Built-in help**: picture tutorial, “Who does what?”, instructions ready to send by email.
   French and English, light or dark theme.
 

@@ -42,6 +42,9 @@ export const isUserTable = id => id !== SYNC_TABLE && !id.startsWith('Synchro_')
 export const APPLIED_COL = 'Sync_Applique'; // version déjà recopiée dans la destination
 export const RECEIVED_COL = 'Sync_Recu'; // date d'arrivée de la ligne dans le journal (NOW())
 export const DATA_COL = 'Synchro_Donnees'; // colonnes envoyées d'une ligne, en un bloc JSON
+// CIBLE : ce que la recopie a remplacé, pour l'historique, en JSON : { v: valeurs d'avant des
+// colonnes modifiées } pour une modification, { n: numéro de la ligne } pour une suppression.
+export const BEFORE_COL = 'Sync_Avant';
 
 // Les clés d'une table sont réparties en BUCKETS seaux selon leur CRC-32 (voir formulas.js).
 export const BUCKETS = 256;

@@ -148,6 +148,13 @@ la seule personne concernée.
   Échange, son widget envoie d'abord une ligne « fin » à l'adresse du webhook, puis l'efface ; la
   carte de la CIBLE affiche « Coupé par la SOURCE ». Qui a la clé peut forger cette ligne : la
   carte le dirait à tort, jusqu'aux données suivantes, qui effacent l'avis. Rien n'est supprimé.
+- **Historique et valeurs retouchées** : la colonne `Sync_Avant` du journal garde, pour
+  l'historique, les valeurs qu'une recopie a remplacées dans la destination (colonnes modifiées
+  seulement) et le numéro d'une ligne supprimée. Ces valeurs restent dans le document, visibles de
+  qui lit le journal comme les versions reçues ; la clé du formulaire ne lit pas les lignes, et la
+  purge efface les versions remplacées. Qui a la clé peut écrire cette colonne : l'historique
+  montrerait un « avant » faux, comme le ferait une version forgée ; rien n'est recopié depuis
+  elle. Les valeurs retouchées à la main se calculent à l'affichage, sans rien écrire.
 - **Rattachement** : si la CIBLE a choisi une colonne commune pour une table existante, une ligne
   locale sans clé dont la valeur est égale à celle d'une ligne reçue est rattachée à celle-ci
   (puis tenue à jour par la SOURCE).

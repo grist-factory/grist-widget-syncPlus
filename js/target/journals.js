@@ -3,7 +3,7 @@
 // Synchro_Ids (voir awaitingPartner pour sa forme) ; la clé du formulaire peut la lire, mais pas
 // l'écrire. Le journal n'a pas de page : seul son formulaire en a une (voir pages.js).
 import {
-  APPLIED_COL, AUTHOR_COL, DATA_COL, DELETE_COL, JOURNAL_PREFIX, KEY_COL, LIST_COL, MISSING_COL, ORDER_COL, RECEIVED_COL, STATE_COL,
+  APPLIED_COL, AUTHOR_COL, BEFORE_COL, DATA_COL, DELETE_COL, JOURNAL_PREFIX, KEY_COL, LIST_COL, MISSING_COL, ORDER_COL, RECEIVED_COL, STATE_COL,
 } from '../logic/common.js';
 import { syncColumns } from '../logic/formulas.js';
 import { apply, readSchema } from '../grist.js';
@@ -11,7 +11,8 @@ import { dropPages, hideColumn } from '../pages.js';
 
 // Colonnes du journal : celles de la table Synchro (le webhook envoie chaque ligne entière), puis
 // les colonnes des lignes dépliées et leurs marques (clé, date, suppression, bloc des colonnes ;
-// recopiée, effet, auteur, date d'arrivée).
+// recopiée, effet, valeurs remplacées, auteur, date d'arrivée). Le webhook n'écrit que les
+// premières : une colonne propre au journal ne gêne pas.
 const JOURNAL_COLUMNS = [
   ...syncColumns([]).map(({ id, type }) => ({ id, type, isFormula: false })).filter(c => ![AUTHOR_COL, MISSING_COL].includes(c.id)),
   { id: KEY_COL, type: 'Text', isFormula: false },
@@ -20,6 +21,7 @@ const JOURNAL_COLUMNS = [
   { id: DATA_COL, type: 'Text', isFormula: false },
   { id: APPLIED_COL, type: 'Bool', isFormula: false },
   { id: STATE_COL, type: 'Text', isFormula: false },
+  { id: BEFORE_COL, type: 'Text', isFormula: false },
   { id: AUTHOR_COL, type: 'Text', isFormula: false, formula: 'user.Email', recalcWhen: 0 },
   { id: RECEIVED_COL, type: 'DateTime:UTC', isFormula: false, formula: 'NOW()', recalcWhen: 0 },
 ];
