@@ -137,7 +137,14 @@ function lotFormula(pick) {
     // petite table repart, sauf dans un Échange, où une version ancienne écraserait l'autre côté).
     `  if len(touched) == len(rows) > (0 if swap else ${SMALL_TABLE}): undone = set()`,
     '  rows = [r for r in rows if r.id in again or r.id in recent or r.id in undone or r.id in fresh]',
-    `def when(r): return v(getattr(r, "${RECALC_COL}") if r.id in undone else r.${ORDER_COL})`,
+    // Une ligne renvoyée part au plus tôt à son dernier recalcul (hors Échange) : un rechargement
+    // du document a pu la faire partir à cette heure-là (petite table), et la CIBLE ignorerait
+    // sinon le renvoi, plus ancien, par exemple celui d'une colonne ajoutée à l'export (vérifié).
+    // En Échange, un renvoi garde l'heure de sa version, pour ne pas l'emporter à tort.
+    'def when(r):',
+    `  if r.id in undone: return v(getattr(r, "${RECALC_COL}"))`,
+    `  if r.id in again and $${TYPE_COL} == "${KIND.lot}" and not swap: return max(v(r.${ORDER_COL}) or 0, v(getattr(r, "${RECALC_COL}", None)) or 0)`,
+    `  return v(r.${ORDER_COL})`,
     // Les listes de l'export partent dans le même envoi : chaque lot prend sa part de ce qu'elles laissent.
     `lists = ${SYNC_TABLE}.lookupRecords(${EXPORT_COL}=$${EXPORT_COL}, ${TYPE_COL}="${KIND.keys}")`,
     `room = ${POST_MAX} - sum(len(r.${LIST_COL} or "") for r in lists)`,

@@ -99,7 +99,9 @@ async function start() {
   applyTheme();
   translatePage();
   $('settings').addEventListener('click', openSettings);
-  for (const button of document.querySelectorAll('[data-tab]')) button.addEventListener('click', () => select(button.dataset.tab));
+  for (const button of document.querySelectorAll('[data-tab]')) {
+    button.addEventListener('click', () => { picked = button.dataset.tab; if (ready) select(picked); });
+  }
 
   if (window.parent === window) return showStartProblem(t('start.outside'), { withAddress: true });
   try {
@@ -127,14 +129,21 @@ async function start() {
   }
 }
 
-// Premier écran : l'onglet du rôle que le document tient déjà, sinon l'accueil.
+// Onglet choisi pendant le démarrage : il est ouvert à la place du premier écran (vu au test : le
+// premier écran, choisi plus tard, l'écrasait).
+let picked = null;
+let ready = false;
+
+// Premier écran : l'onglet choisi, sinon celui du rôle que le document tient déjà, sinon l'accueil.
 async function openFirstScreen() {
   const schema = await readSchema();
   const journals = receivedJournals(schema);
   // Échange dont le formulaire de retour vient d'être publié : l'assistant reprend dans Envoyer.
   // Le journal de retour d'un Échange fait partie de l'envoi : il n'ouvre pas Recevoir.
   const backLink = readSourceNote(schema).invitations.some(inv => inv.journal && !inv.ready);
-  if (!backLink && (journals.some(r => !r.note.retour) || legacyJournals(schema).length)) await select('receive');
+  ready = true;
+  if (picked) await select(picked);
+  else if (!backLink && (journals.some(r => !r.note.retour) || legacyJournals(schema).length)) await select('receive');
   else if (schema.has(SYNC_TABLE) || legacyTables(schema).length) await select('send');
   else showHome();
   if (journals.length) consolidateAll();
