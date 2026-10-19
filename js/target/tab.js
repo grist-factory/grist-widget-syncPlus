@@ -64,7 +64,7 @@ export async function renderTarget(root = container) {
   const toolbar = el('div', { class: 'toolbar' },
     el('button', { class: 'btn btn-primary', type: 'button', disabled: state.readOnly, onclick: () => receiveWizard(null, renderTarget) }, icon('plus'), t('recv.new')),
     el('button', { class: 'btn', type: 'button', disabled: state.readOnly || !groups.length, onclick: e => run(e.currentTarget, out, sync) }, icon('refresh'), t('recv.action.sync')));
-  const cards = groups.map(syncCard);
+  const cards = groups.map(safeCard);
   if (legacy.length) cards.push(legacyCard(legacy, out));
   container.replaceChildren(...[toolbar,
     state.readOnly ? message('warn', t('common.readonly')) : null,
@@ -145,6 +145,22 @@ function syncCard(group) {
     el('div', { class: 'card-actions' },
       group.public || note.retour ? null : button(t(group.waiting ? 'recv.action.continue' : 'recv.action.link'), 'link', () => receiveWizard(group, renderTarget), group.waiting ? 'btn-primary' : ''),
       button(t('recv.action.stop'), 'stop', () => stopReceiving(group), 'btn-danger-text')));
+}
+
+// Une carte qui ne se dessine pas (journal abîmé, ligne forgée) n'emporte pas tout l'onglet : elle
+// garde son nom, l'erreur, et de quoi couper le lien ou arrêter la réception.
+function safeCard(group) {
+  try {
+    return syncCard(group);
+  } catch (e) {
+    console.error(e);
+    return el('article', { class: 'card', 'data-journal': group.journal },
+      el('div', { class: 'card-head' }, el('strong', {}, String(group.note.name || group.journal)), el('span', { class: 'pill pill-err' }, t('recv.status.error'))),
+      message('err', errorText(e)),
+      el('div', { class: 'card-actions' },
+        group.public ? null : button(t('recv.suspect.cut'), 'unlink', () => cutLink(group), 'btn-danger-text'),
+        button(t('recv.action.stop'), 'stop', () => stopReceiving(group), 'btn-danger-text')));
+  }
 }
 
 const alertBlock = (title, lines, actions) => el('div', { class: 'msg msg-warn suspect', role: 'status' },

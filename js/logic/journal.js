@@ -291,10 +291,14 @@ export const STATES = ['ajout', 'modif', 'suppression'];
 const SCHEMA_TABLES = ['_grist_Tables', '_grist_Tables_column'];
 export const touchedTables = (changed, watched) => (changed === null ? null
   : [...changed].filter(table => watched.has(table) || SCHEMA_TABLES.includes(table)));
+// Une date hors de ce que JavaScript sait écrire (une ligne écrite par la clé du formulaire peut en
+// porter une) ferait échouer tout l'onglet : elle n'est pas montrée.
+const MAX_TIME_S = 8.64e12;
+const validTime = at => Number.isFinite(at) && Math.abs(at) < MAX_TIME_S;
 export function recentChanges(journalRows, labelCol, since, max, { copyCols = [], numbers = new Map() } = {}) {
   return [...latestByKey(journalRows).values()]
     .map(v => ({ at: v.row[RECEIVED_COL] ?? v.order, state: v.row[STATE_COL], row: v.row }))
-    .filter(c => STATES.includes(c.state) && typeof c.at === 'number' && c.at > since)
+    .filter(c => STATES.includes(c.state) && validTime(c.at) && c.at > since)
     .sort((a, b) => b.at - a.at).slice(0, max)
     .map((c) => {
       const was = parseJson(c.row[BEFORE_COL]) || {};
