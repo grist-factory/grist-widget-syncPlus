@@ -21,8 +21,8 @@ function initialLang() {
 export const LANG = initialLang();
 
 // Typographie française : espace insécable avant « : ; ? ! » et à l'intérieur des guillemets, pour
-// qu'aucun signe ne commence une ligne.
-const frenchSpaces = text => text.replace(/ ([:;?!»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
+// qu'aucun signe ne commence une ligne. Aussi pour les textes du tutoriel.
+export const frenchSpaces = text => text.replace(/ ([:;?!»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
 
 // format('fr', 'send.waiting', {n: 3}) -> « 3 envois en attente ». Les nombres s'écrivent à la
 // façon de la langue (« 3 000 ») ; les autres valeurs (noms, adresses, détails d'erreur) restent
@@ -43,8 +43,8 @@ export function format(lang, key, vars = {}) {
 
 export const t = (key, vars) => format(LANG, key, vars);
 
-// Dates et heures à la façon de la langue (millisecondes, ou secondes pour timeText).
-export const dateText = ms => new Date(ms).toLocaleString(LANG);
+// Dates et heures à la façon de la langue, à la minute (millisecondes, ou secondes pour timeText).
+export const dateText = ms => new Date(ms).toLocaleString(LANG, { dateStyle: 'short', timeStyle: 'short' });
 export const timeText = sec => new Date(sec * 1000).toLocaleTimeString(LANG, { hour: '2-digit', minute: '2-digit' });
 
 // Type d'une colonne Grist, en clair : « Référence (Villes) », « Date et heure ».
